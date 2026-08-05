@@ -1,0 +1,17 @@
+faster-whisper>=1.0.0
+customtkinter>=5.2.0
+fpdf2>=2.7.0
+Pillow>=10.0.0
+imagehash>=4.3.1
+
+# --- Optional GPU support (NVIDIA CUDA) -----------------------------------
+# These three wheels ship cuBLAS, cuDNN and the CUDA runtime as Python
+# packages. They let ctranslate2/faster-whisper find the DLLs on
+# Windows without installing the full ~3 GB CUDA Toolkit. Remove the
+# leading "# " below to enable GPU transcription (~5-10x faster than
+# CPU on RTX 3060+). Requires an NVIDIA driver >= 525 (any recent
+# version is fine). The app runs fine without them — it just falls
+# back to CPU transparently.
+# nvidia-cublas-cu12>=12.4.0
+# nvidia-cudnn-cu12>=9.0.0
+# nvidia-cuda-runtime-cu12>=12.4.0

@@ -1,0 +1,156 @@
+# =========================================================
+# MediaForge — .gitignore
+# Cosas que NO deben subirse al repo
+# =========================================================
+
+# --- Python -----------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+wheels/
+*.manifest
+*.spec
+
+# Entornos virtuales
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.python-version
+.python-cache/
+
+# Dependencias / installs
+pip-log.txt
+pip-delete-this-directory.txt
+*.pip
+
+# Tests / coverage
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+coverage.xml
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+profile_default/
+
+# --- Secretos / entorno -----------------------------------
+.env
+.env.*
+!.env.example
+secrets.*
+*.key
+*.pem
+
+# --- Sistema operativo ------------------------------------
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+$RECYCLE.BIN
+$Windows.~bt
+$Windows.~ws
+System Volume Information/
+
+# macOS
+.DS_Store
+.DS_Store?
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Linux
+*~
+.fuse_hidden*
+.Trash-*
+.nfs*
+
+# --- IDEs / editores --------------------------------------
+.vscode/
+!.vscode/settings.json.example
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+.project
+.pydevproject
+.settings/
+
+# --- Logs / temporales ------------------------------------
+*.log
+*.log.*
+logs/
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+
+# --- MediaForge: archivos específicos ----------------------
+# Archivo suelto con nombre extraño (notas personales, NO subir)
+-.txt
+
+# Configuración local de Claude Code (este repo)
+.claude/
+
+# Carpeta assets/ — las fuentes TTF opcionales NO se versionan
+# (el usuario las descarga manualmente si quiere Unicode completo).
+# Ver README → sección "Soporte Unicode opcional"
+assets/
+
+# Salidas generadas por la app
+output/
+outputs/
+frames/
+*.pdf
+*.json
+!package.json
+
+# Archivos temporales de ffmpeg / whisper
+temp_audio_*
+audio_*.wav
+audio_*.mp3
+*.wav.tmp
+
+# Modelos descargados por faster-whisper / huggingface (~150 MB - 3 GB)
+models/
+*.bin
+*.pt
+*.gguf
+
+# Capturas de pantalla de la app / debugging
+screenshots/
+*.screenshot.png
