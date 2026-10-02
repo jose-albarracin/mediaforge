@@ -1,6 +1,6 @@
 # MediaForge
 
-Centro multimedia local para Windows: transcribe audio/vídeo a texto, convierte entre formatos populares y genera **documentos PDF enriquecidos** con capturas de pantalla sincronizadas a la transcripción. Todo con la mayor calidad y velocidad que tu hardware permita (incluyendo GPU NVIDIA / AMD / Intel cuando están disponibles).
+Centro multimedia local para Windows, macOS y Linux: transcribe audio/vídeo a texto, convierte entre formatos populares y genera **documentos PDF enriquecidos** con capturas de pantalla sincronizadas a la transcripción. Todo con la mayor calidad y velocidad que tu hardware permita (incluyendo GPU NVIDIA / AMD / Intel cuando están disponibles).
 
 > Sin nube, sin marcas de agua, sin límites artificiales. 100% local.
 
@@ -21,7 +21,7 @@ Si solo quieres arrancar la app **ya** en Windows:
 
 Eso es todo. Si algo falla, abre un issue pegando la salida de la consola.
 
-> � **Linux/macOS**: la app está pensada para Windows pero el código es portable. Salta `run.bat` y ve directo a [Instalación manual](#instalación-manual). En Linux también necesitas `ffmpeg` (`sudo apt install ffmpeg` o equivalente).
+> 🍎🐧 **macOS / Linux**: `run.bat` es solo para Windows, pero la app funciona igual. Ve a [Instalación en macOS y Linux](#opción-c--macos-y-linux).
 
 ## Módulos
 
@@ -74,7 +74,7 @@ Eso es todo. Si algo falla, abre un issue pegando la salida de la consola.
   - **Baja** (q75): ~60 KB/frame — ahorra más espacio, leve pérdida de nitidez.
   - Comparativa típica (39 frames de pantalla compartida): PNG lossless → 88 MB; JPEG q85 → **3 MB** (~30× menos).
 - **Salidas opcionales**: PDF, JSON estructurado, `.txt` con timestamps, carpeta de frames.
-- **Auto-fallback**: si tu vídeo no tiene cambios de escena con score ≥ al threshold que pusiste, la app reintenta automáticamente con el mínimo (0.01) y avisa en el log.
+- **Auto-fallback**: si tu vídeo no tiene cambios de escena con score ≥ al threshold que pusiste, la app reintenta automáticamente con el mínimo (0.01) en modo escena, o con intervalo fijo en modo híbrido, y avisa en el log. Si el que falla es ffmpeg (archivo dañado, formato no soportado), el log muestra el error real de ffmpeg.
 - **Log grande con botón "📋 Copiar log"** integrado en la pestaña, para pegar el detalle de cualquier error en un chat.
 - **Scroll automático**: si la ventana es más baja que el contenido, aparece una scrollbar.
 - Usa `fpdf2` para el PDF (puro Python) y `Pillow` para mantener las imágenes ligeras.
@@ -85,8 +85,10 @@ Eso es todo. Si algo falla, abre un issue pegando la salida de la consola.
 
 Necesitas **tres cosas** instaladas en tu sistema antes de poder ejecutar MediaForge:
 
-### 1. Windows 10 u 11
-La app usa `customtkinter` y se ha probado solo en Windows. El código es portable (no hay nada Windows-only en los módulos), pero `run.bat` y el instalador automático de wheels CUDA sí son específicos de Windows.
+### 1. Sistema operativo
+- **Windows 10 u 11**: plataforma principal, con `run.bat` para instalar y arrancar.
+- **macOS y Linux**: los módulos de transcripción, conversión y enriquecido funcionan igual (verificado en macOS con ffmpeg 9). `run.bat` no aplica; se instala a mano (ver [Opción C](#opción-c--macos-y-linux)). La interfaz necesita Tkinter (`brew install python-tk` / `sudo apt install python3-tk`).
+- **Aceleración**: la transcripción por GPU es solo NVIDIA CUDA (Windows/Linux). En Mac transcribe por CPU. En el conversor, VideoToolbox de Apple no está soportado todavía: usa CPU.
 
 ### 2. Python 3.10 o superior
 Descárgalo de https://www.python.org/downloads/. Durante la instalación **marca estas dos casillas**:
@@ -99,8 +101,8 @@ py -3 --version
 ```
 Debería mostrar `Python 3.10.x` o superior.
 
-### 3. ffmpeg en el PATH
-Lo usan **Transcriptor** y **Conversor**. La forma más rápida en Windows es:
+### 3. ffmpeg 5.1 o superior en el PATH
+Lo usan **Transcriptor** y **Conversor**. Se requiere 5.1+ porque la extracción de frames usa `-fps_mode` (la opción antigua `-vsync` se eliminó en ffmpeg 7). La forma más rápida en Windows es:
 ```powershell
 winget install Gyan.FFmpeg
 ```
@@ -122,7 +124,7 @@ Alternativas si `winget` no te funciona:
 Simplemente doble clic en **`run.bat`**. Este script:
 1. Verifica que Python y ffmpeg estén instalados.
 2. Si faltan dependencias, las instala desde `requirements.txt` (`faster-whisper`, `customtkinter`, `fpdf2`, `Pillow`, `imagehash`).
-3. Si detecta una GPU NVIDIA y los wheels CUDA no están, los instala también (≈1.4 GB).
+3. Si detecta una GPU NVIDIA y los wheels CUDA no están, **pregunta** si quieres descargarlos (≈1.4 GB). Si respondes `N`, la app arranca igual y transcribe por CPU.
 4. Lanza `main.py`.
 
 La consola **se queda abierta** al final para que veas cualquier error. No la cierres hasta que termines de usar la app.
@@ -147,6 +149,22 @@ py -3 -m pip install nvidia-cublas-cu12 nvidia-cudnn-cu12 nvidia-cuda-runtime-cu
 # 5) Ejecuta la app
 py -3 main.py
 ```
+
+### Opción C — macOS y Linux
+
+```bash
+# macOS
+brew install ffmpeg python-tk
+# Linux (Debian/Ubuntu)
+sudo apt install ffmpeg python3-tk python3-venv
+
+cd mediaforge
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python main.py
+```
+
+Los botones "Abrir PDF" y "Abrir carpeta" usan `open` en macOS y `xdg-open` en Linux.
 
 > 💡 **Entorno virtual (`.venv`)**: está ignorado por `.gitignore`, así que puedes crearlo sin miedo. Si no quieres usarlo, sáltate los pasos 2 y simplemente usa tu Python global.
 
@@ -175,11 +193,12 @@ Por defecto el PDF usa *Helvetica* built-in (Latin-1): cubre acentos del españo
 Una vez instalado, **cada vez** que quieras usar la app:
 
 - **Windows con run.bat**: doble clic en `run.bat`.
-- **Cualquier plataforma**:
+- **Windows sin run.bat**:
   ```powershell
   cd C:\Apps\pruebas\mediaforge
   py -3 main.py
   ```
+- **macOS / Linux**: `.venv/bin/python main.py` desde la carpeta del proyecto.
 
 La app abre una ventana con 4 pestañas: **Inicio**, **Transcriptor**, **Conversor**, **Enriquecida**.
 
@@ -209,6 +228,9 @@ mediaforge\
 | Conversión se queda al 0% y da error | El codec que elegiste no funciona con tu hardware. | Cambia "Aceleración" a `Auto` o `CPU`. |
 | Ventana se cierra al doble clic en `run.bat` | El `.bat` no mostraba errores. | `run.bat` siempre hace `pause` al final. |
 | Enriquecida: muchos frames (>300) | Threshold muy bajo o intervalo muy corto. | Sube "Sensibilidad de escena" o "Intervalo entre frames". |
+| Enriquecida (modos escena/híbrido): `Unrecognized option 'vsync'` o 0 frames con cualquier vídeo | Versiones ≤ 1.5 usaban `-vsync`, eliminado en ffmpeg 7+. | Corregido en v1.5.1 (usa `-fps_mode`). Requiere ffmpeg 5.1+. |
+| Transcripción: `TypeError: open() got an unexpected keyword argument 'metadata_errors'` | PyAV 19 quitó un argumento que usa faster-whisper. | Corregido en v1.5.1: `requirements.txt` fija `av<19`. Si ya lo tienes: `pip install "av<19"`. |
+| Enriquecida con fuentes DejaVu: `Undefined font: dejavuI` | Faltaba registrar la variante cursiva. | Corregido en v1.5.1. |
 | Enriquecida: 0 frames, "ffmpeg no produjo ningún frame" | El vídeo no tiene cambios de escena con score ≥ threshold. | v1.1 hace auto-fallback a threshold 0.01. Si sigue sin haber frames, cambia el modo a "Intervalo fijo". |
 | Enriquecida: intervalo produce demasiados frames | (Bug de v1.0) `lt(mod(t,N),1)` seleccionaba 24 frames por intervalo. | v1.1 usa `fps=1/N` y produce exactamente 1 frame cada N segundos. |
 | Ventana corta no muestra todo el contenido | La pestaña no tenía scroll. | v1.1 envuelve cada pestaña en un `CTkScrollableFrame`; si la ventana es más baja que el contenido aparece una scrollbar automáticamente. |
@@ -223,6 +245,16 @@ mediaforge\
 - **Enriquecida**: sin OCR (no lee el texto que aparece en pantalla; solo guarda la imagen). Ver roadmap v2.
 
 ## 📝 Historial de cambios
+
+### v1.5.1 — Correcciones
+- **Frames con ffmpeg 7+**: los modos "Solo cambios de escena" e "Híbrido" fallaban siempre porque `-vsync` ya no existe; ahora se usa `-fps_mode`.
+- **Errores honestos**: si ffmpeg falla, el log muestra su error real en vez de decir que el vídeo no tiene cambios de escena. El modo híbrido sin frames reintenta con intervalo fijo.
+- **Transcripción**: `requirements.txt` fija `av<19`; PyAV 19 rompía toda transcripción con faster-whisper.
+- **PDF**: ya no genera una página extra con solo el número por cada bloque; con fuentes DejaVu ya no falla por la cursiva; no recomprime los JPEG (antes había doble compresión).
+- **Frames**: al repetir un análisis ya no quedan frames de la corrida anterior; desmarcar "conservar frames" ahora sí borra la carpeta; avisos cuando un frame no se puede comprimir o faltan timestamps.
+- **Conversor**: barra de progreso y cancelación inmediata también al extraer MP3; si se cancela o falla, se borra el archivo a medias y el error incluye las últimas líneas de ffmpeg.
+- **macOS / Linux**: los botones "Abrir" ya no fallan (antes usaban `os.startfile`, solo Windows).
+- **run.bat**: corregido `2>n1` (creaba un archivo basura `n1`), escapados los paréntesis en los mensajes, verifica todas las dependencias y pregunta antes de descargar 1,4 GB de CUDA.
 
 ### v1.5 — Mini-informe al final de cada operación
 - **Qué**: al terminar una transcripción, conversión o enriquecido, la app emite un pequeño recuadro en el log con tiempos por fase, tamaños, conteos y velocidad.
