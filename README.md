@@ -30,7 +30,7 @@ Una ventana con barra lateral y dos herramientas: **Transcribir reunión** y **C
 - Cada herramienta pide lo mínimo: el archivo y el resultado que quieres. Lo técnico (modelo, dispositivo, modo de capturas, deduplicación, códec, aceleración) está en **Mostrar opciones avanzadas**, con valores por defecto que funcionan.
 - Una barra fija abajo muestra siempre el estado, el tiempo transcurrido, el progreso y el botón principal. Al terminar aparecen **Abrir PDF/texto** y **Mostrar carpeta**.
 - **Ver registro** abre el detalle técnico de ffmpeg y Whisper, con botón para copiarlo si algo falla.
-- Apariencia **Sistema / Claro / Oscuro** desde la barra lateral. Un solo color de acento (terracota) marca la acción principal, el progreso y los enlaces; todos los textos cumplen contraste ≥ 4,5:1 en ambos modos.
+- Apariencia **Sistema / Claro / Oscuro** desde la barra lateral. Un solo color de acento (azul claro) marca la acción principal, el progreso y los enlaces; todos los textos cumplen contraste ≥ 4,5:1 en ambos modos.
 
 ## Módulos
 
@@ -256,7 +256,7 @@ mediaforge\
 - **Barra lateral con dos herramientas** en vez de 4 pestañas: "Transcribir reunión" une el transcriptor y la transcripción enriquecida (eliges "Documento con capturas" o "Solo texto"); "Convertir vídeo" es el conversor.
 - **Opciones avanzadas plegadas**: el uso normal es elegir archivo y pulsar un botón. Las etiquetas hablan en términos del resultado ("Preciso, más lento") y no del parámetro.
 - **Barra de acción fija** con estado, cronómetro, progreso, cancelar y, al terminar, abrir el resultado o su carpeta.
-- **Modo claro y oscuro** con el selector en la barra lateral. Acento terracota único; selección neutra (como macOS) para que el texto seleccionado se lea en los dos modos; cancelar es neutro porque no destruye nada.
+- **Modo claro y oscuro** con el selector en la barra lateral. Acento azul claro único; selección neutra (como macOS) para que el texto seleccionado se lea en los dos modos; cancelar es neutro porque no destruye nada.
 - Se eliminó `home.py` (la pestaña de inicio con tarjetas).
 
 ### v1.5.1 — Correcciones

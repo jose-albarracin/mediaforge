@@ -17,7 +17,7 @@ from typing import Callable, Optional
 import customtkinter as ctk
 
 # ---- Palette (light, dark) --------------------------------------------------
-# One warm accent (terracotta) for the primary action, progress and links.
+# One light-blue accent for the primary action, progress and links.
 # Selection is neutral, like macOS: a raised surface plus weight, never a
 # tinted fill. All text pairs measured >= 4.5:1 in both appearances.
 SIDEBAR_BG = ("#E9EAED", "#1B1C1F")
@@ -27,11 +27,14 @@ BORDER = ("#D5D7DC", "#3A3C41")
 SEPARATOR = ("#E1E2E6", "#303236")
 TEXT = ("#1D1E21", "#E8E9EC")
 TEXT_MUTED = ("#5D6068", "#A2A5AD")
-ACCENT = ("#A8461F", "#EC7046")           # 5.9:1 under white / 6.2:1 under ON_ACCENT
-ACCENT_HOVER = ("#8F3B19", "#F08A62")
-ON_ACCENT = ("#FFFFFF", "#1A0F0A")         # text on an ACCENT fill
-LINK = ("#9A3F1A", "#F08A62")              # 6.3:1 / 6.4:1 on CONTENT_BG
-LINK_HOVER = ("#7A3013", "#F5A383")
+# Light blue fill with dark navy text in both modes (7.0:1). A light blue
+# can't be link text on a near-white page, so links use a deeper blue
+# there (5.9:1) and the same light blue in dark mode (8.0:1).
+ACCENT = ("#6AA6F8", "#6AA6F8")
+ACCENT_HOVER = ("#5B95E8", "#8BBCFB")
+ON_ACCENT = ("#0B1A33", "#0B1A33")         # text on an ACCENT fill
+LINK = ("#1F5BBF", "#8BBCFB")
+LINK_HOVER = ("#174FA8", "#9CC6FC")
 SELECTED = ("#FFFFFF", "#34363B")          # selected nav item / segment
 SELECTED_HOVER = ("#FFFFFF", "#3A3C41")
 # Segment selected on a NEUTRAL_BTN track: in dark it must be lighter than
