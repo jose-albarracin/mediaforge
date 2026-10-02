@@ -3,7 +3,7 @@ setlocal EnableExtensions
 cd /d "%~dp0"
 
 echo ========================================================
-echo   MediaForge 1.0  -  Lanzador
+echo   MediaForge 2.0  -  Lanzador
 echo ========================================================
 echo.
 

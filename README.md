@@ -23,16 +23,24 @@ Eso es todo. Si algo falla, abre un issue pegando la salida de la consola.
 
 > 🍎🐧 **macOS / Linux**: `run.bat` es solo para Windows, pero la app funciona igual. Ve a [Instalación en macOS y Linux](#opción-c--macos-y-linux).
 
+## La interfaz (v2.0)
+
+Una ventana con barra lateral y dos herramientas: **Transcribir reunión** y **Convertir vídeo**.
+
+- Cada herramienta pide lo mínimo: el archivo y el resultado que quieres. Lo técnico (modelo, dispositivo, modo de capturas, deduplicación, códec, aceleración) está en **Mostrar opciones avanzadas**, con valores por defecto que funcionan.
+- Una barra fija abajo muestra siempre el estado, el tiempo transcurrido, el progreso y el botón principal. Al terminar aparecen **Abrir PDF/texto** y **Mostrar carpeta**.
+- **Ver registro** abre el detalle técnico de ffmpeg y Whisper, con botón para copiarlo si algo falla.
+- Apariencia **Sistema / Claro / Oscuro** desde la barra lateral. Un solo color de acento (terracota) marca la acción principal, el progreso y los enlaces; todos los textos cumplen contraste ≥ 4,5:1 en ambos modos.
+
 ## Módulos
 
-### 🎙️ Transcriptor
+### 🎙️ Transcribir reunión → Solo texto
 - Extrae el audio con **ffmpeg** y lo transcribe con **faster-whisper**.
 - Modelos: `tiny`, `base`, `small`, `medium`, `large-v3`.
 - Idiomas: español, inglés, francés, alemán, italiano, portugués + auto-detección.
-- Salida: `.txt` junto al archivo de entrada.
-- Botón **🧹 Limpiar** para vaciar campos y registro.
+- Salida: `.txt` junto al archivo de entrada (se puede cambiar en "Guardar en").
 
-### 🔄 Conversor
+### 🔄 Convertir vídeo
 - Convierte entre formatos populares: **MP4** (H.264 / H.265) o extrae audio a **MP3**.
 - Aceleración por hardware cuando esté disponible:
   - **NVIDIA NVENC** (`h264_nvenc` / `hevc_nvenc`)
@@ -42,7 +50,7 @@ Eso es todo. Si algo falla, abre un issue pegando la salida de la consola.
 - Calidades: Alta, Media, Baja.
 - Barra de progreso en tiempo real basada en `ffmpeg -progress`.
 
-### 📑 Transcripción enriquecida (v1.3)
+### 📑 Transcribir reunión → Documento con capturas
 - Toma un **vídeo** (mp4, mkv, avi, mov…) y produce un **PDF navegable** donde cada página es un bloque:
   ```
   ┌──────────────────────────────────────────┐
@@ -75,8 +83,6 @@ Eso es todo. Si algo falla, abre un issue pegando la salida de la consola.
   - Comparativa típica (39 frames de pantalla compartida): PNG lossless → 88 MB; JPEG q85 → **3 MB** (~30× menos).
 - **Salidas opcionales**: PDF, JSON estructurado, `.txt` con timestamps, carpeta de frames.
 - **Auto-fallback**: si tu vídeo no tiene cambios de escena con score ≥ al threshold que pusiste, la app reintenta automáticamente con el mínimo (0.01) en modo escena, o con intervalo fijo en modo híbrido, y avisa en el log. Si el que falla es ffmpeg (archivo dañado, formato no soportado), el log muestra el error real de ffmpeg.
-- **Log grande con botón "📋 Copiar log"** integrado en la pestaña, para pegar el detalle de cualquier error en un chat.
-- **Scroll automático**: si la ventana es más baja que el contenido, aparece una scrollbar.
 - Usa `fpdf2` para el PDF (puro Python) y `Pillow` para mantener las imágenes ligeras.
 - **PDF Unicode opcional**: por defecto usa Helvetica built-in (Latin-1, soporta acentos del español). Si colocas `assets/DejaVuSans.ttf` + `assets/DejaVuSans-Bold.ttf` en la carpeta del proyecto, el PDF pasa automáticamente a Unicode completo (japonés, chino, coreano, árabe, cirílico, etc.). Sin esos archivos, los caracteres fuera de Latin-1 se reemplazan por `?` — la app **nunca** falla.
 - **Limpieza de alucinaciones de Whisper**: si el audio tiene silencios largos, Whisper puede inventarse caracteres chinos / japoneses / coreanos. Esos caracteres se eliminan automáticamente del PDF antes de imprimirlo (los `.txt` y `.json` los conservan para que veas lo que Whisper dijo realmente).
@@ -176,7 +182,7 @@ py -3 -m pip install nvidia-cublas-cu12 nvidia-cudnn-cu12 nvidia-cuda-runtime-cu
 ```
 Solo necesitas un **driver NVIDIA actualizado** (≥ 525). No hace falta instalar el CUDA Toolkit completo (~3 GB), esos wheels ya traen las DLLs.
 
-En la app, ve al Transcriptor o "Enriquecida" y elige `Dispositivo: Auto` (recomendado) o `GPU (NVIDIA CUDA)`.
+En la app, abre **Transcribir reunión → Mostrar opciones avanzadas** y elige `Dispositivo: Automático` (recomendado) o `GPU NVIDIA (CUDA)`.
 
 ### Soporte Unicode opcional (PDF con japonés, chino, árabe…)
 
@@ -200,14 +206,14 @@ Una vez instalado, **cada vez** que quieras usar la app:
   ```
 - **macOS / Linux**: `.venv/bin/python main.py` desde la carpeta del proyecto.
 
-La app abre una ventana con 4 pestañas: **Inicio**, **Transcriptor**, **Conversor**, **Enriquecida**.
+La app abre una ventana con dos herramientas en la barra lateral: **Transcribir reunión** y **Convertir vídeo**.
 
 ## Estructura
 
 ```
 mediaforge\
-├── main.py            # Shell de la app con 4 pestañas (Inicio, Transcriptor, Conversor, Enriquecida)
-├── home.py            # Pestaña de inicio con tarjetas
+├── main.py            # Ventana, barra lateral y las dos páginas (transcribir, convertir)
+├── ui_kit.py          # Paleta claro/oscuro, controles y la página base con barra de acción
 ├── transcriber.py     # Módulo 1: ffmpeg + faster-whisper
 ├── converter.py       # Módulo 2: conversión de vídeo/audio
 ├── analyzer.py        # Módulo 3: correlación multimodal + PDF enriquecido
@@ -225,7 +231,7 @@ mediaforge\
 | `Library cublas64_12.dll is not found or cannot be loaded` | ctranslate2 intentó usar GPU NVIDIA sin las DLLs de CUDA disponibles. | **Solución recomendada (1.4 GB)**: `py -3 -m pip install nvidia-cublas-cu12 nvidia-cudnn-cu12 nvidia-cuda-runtime-cu12` y reinicia la app. La próxima versión de `run.bat` lo hace automáticamente. **Alternativa (3 GB)**: instalar CUDA Toolkit 12.x desde https://developer.nvidia.com/cuda-downloads. Mientras tanto, cambia "Dispositivo" a "CPU (software)" en la app. |
 | `ffmpeg no está en PATH` | ffmpeg no instalado. | `winget install Gyan.FFmpeg` y reinicia la terminal. |
 | `Model download failed` al transcribir | Red/firewall bloquea huggingface.co. | Reintenta; o descarga manualmente desde https://huggingface.co/Systran/faster-whisper-small. |
-| Conversión se queda al 0% y da error | El codec que elegiste no funciona con tu hardware. | Cambia "Aceleración" a `Auto` o `CPU`. |
+| Conversión se queda al 0% y da error | El codec que elegiste no funciona con tu hardware. | En opciones avanzadas cambia "Aceleración" a `Automática` o `Procesador (CPU)`. |
 | Ventana se cierra al doble clic en `run.bat` | El `.bat` no mostraba errores. | `run.bat` siempre hace `pause` al final. |
 | Enriquecida: muchos frames (>300) | Threshold muy bajo o intervalo muy corto. | Sube "Sensibilidad de escena" o "Intervalo entre frames". |
 | Enriquecida (modos escena/híbrido): `Unrecognized option 'vsync'` o 0 frames con cualquier vídeo | Versiones ≤ 1.5 usaban `-vsync`, eliminado en ffmpeg 7+. | Corregido en v1.5.1 (usa `-fps_mode`). Requiere ffmpeg 5.1+. |
@@ -245,6 +251,13 @@ mediaforge\
 - **Enriquecida**: sin OCR (no lee el texto que aparece en pantalla; solo guarda la imagen). Ver roadmap v2.
 
 ## 📝 Historial de cambios
+
+### v2.0 — Interfaz nueva
+- **Barra lateral con dos herramientas** en vez de 4 pestañas: "Transcribir reunión" une el transcriptor y la transcripción enriquecida (eliges "Documento con capturas" o "Solo texto"); "Convertir vídeo" es el conversor.
+- **Opciones avanzadas plegadas**: el uso normal es elegir archivo y pulsar un botón. Las etiquetas hablan en términos del resultado ("Preciso, más lento") y no del parámetro.
+- **Barra de acción fija** con estado, cronómetro, progreso, cancelar y, al terminar, abrir el resultado o su carpeta.
+- **Modo claro y oscuro** con el selector en la barra lateral. Acento terracota único; selección neutra (como macOS) para que el texto seleccionado se lea en los dos modos; cancelar es neutro porque no destruye nada.
+- Se eliminó `home.py` (la pestaña de inicio con tarjetas).
 
 ### v1.5.1 — Correcciones
 - **Frames con ffmpeg 7+**: los modos "Solo cambios de escena" e "Híbrido" fallaban siempre porque `-vsync` ya no existe; ahora se usa `-fps_mode`.
