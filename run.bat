@@ -3,7 +3,7 @@ setlocal EnableExtensions
 cd /d "%~dp0"
 
 echo ========================================================
-echo   MediaForge 2.0  -  Lanzador
+echo   Heimdall 2.1  -  Lanzador
 echo ========================================================
 echo.
 
@@ -83,7 +83,7 @@ REM usa Helvetica built-in y reemplaza cualquier caracter fuera de
 REM Latin-1 (espanol funciona perfecto; japones/chino/arabe salen como ?).
 
 echo.
-echo [4/4] Lanzando MediaForge...
+echo [4/4] Lanzando Heimdall...
 echo   Cuando cierres la ventana de la app, esta consola
 echo   mostrara el resultado y se quedara esperando una tecla.
 echo.
@@ -94,10 +94,10 @@ set "RC=%errorlevel%"
 echo.
 echo ========================================================
 if %RC% neq 0 (
-    echo   MediaForge termino con codigo de error: %RC%
+    echo   Heimdall termino con codigo de error: %RC%
     echo   Si viste una ventana de error arriba, copialo y pegamelo.
 ) else (
-    echo   MediaForge se cerro normalmente.
+    echo   Heimdall se cerro normalmente.
 )
 echo ========================================================
 echo.

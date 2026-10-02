@@ -1,4 +1,4 @@
-"""Mini-report renderer shared by all MediaForge operations.
+"""Mini-report renderer shared by all Heimdall operations.
 
 Each module (`transcriber`, `converter`, `analyzer`) calls
 ``print_report()`` at the end of a run with a structured summary.

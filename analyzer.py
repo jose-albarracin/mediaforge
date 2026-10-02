@@ -699,7 +699,7 @@ def build_enriched_pdf(
     pdf.set_font(font, "B", 18)
     pdf.cell(0, 12, _safe(title), new_x="LMARGIN", new_y="NEXT", align="C")
     pdf.set_font(font, "", 11)
-    pdf.cell(0, 6, _safe(f"Generado por MediaForge · {len(blocks)} bloques"),
+    pdf.cell(0, 6, _safe(f"Generado por Heimdall · {len(blocks)} bloques"),
              new_x="LMARGIN", new_y="NEXT", align="C")
     pdf.ln(6)
 
@@ -810,7 +810,7 @@ def enrich_video(
     log(f"[1/5] Extrayendo audio de {input_path.name}…")
     progress(0.02)
     t = time.monotonic()
-    with tempfile.TemporaryDirectory(prefix="mediaforge_") as tmp:
+    with tempfile.TemporaryDirectory(prefix="heimdall_") as tmp:
         wav = Path(tmp) / "audio.wav"
         from transcriber import extract_audio
         extract_audio(input_path, wav, log)

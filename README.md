@@ -1,4 +1,10 @@
-# MediaForge
+<p align="center">
+  <img src="branding/heimdall.png" alt="Heimdall" width="128" height="128">
+</p>
+
+# Heimdall
+
+> Antes se llamaba **MediaForge**. El repositorio conserva el nombre `mediaforge`; la app, la ventana y la documentación se llaman Heimdall desde la v2.1.
 
 Centro multimedia local para Windows, macOS y Linux: transcribe audio/vídeo a texto, convierte entre formatos populares y genera **documentos PDF enriquecidos** con capturas de pantalla sincronizadas a la transcripción. Todo con la mayor calidad y velocidad que tu hardware permita (incluyendo GPU NVIDIA / AMD / Intel cuando están disponibles).
 
@@ -89,7 +95,7 @@ Una ventana con barra lateral y dos herramientas: **Transcribir reunión** y **C
 
 ## 📋 Requisitos
 
-Necesitas **tres cosas** instaladas en tu sistema antes de poder ejecutar MediaForge:
+Necesitas **tres cosas** instaladas en tu sistema antes de poder ejecutar Heimdall:
 
 ### 1. Sistema operativo
 - **Windows 10 u 11**: plataforma principal, con `run.bat` para instalar y arrancar.
@@ -176,7 +182,7 @@ Los botones "Abrir PDF" y "Abrir carpeta" usan `open` en macOS y `xdg-open` en L
 
 ### Soporte GPU opcional (NVIDIA)
 
-Por defecto MediaForge usa la **CPU** (funciona siempre). Si tienes una GPU NVIDIA reciente (RTX 20xx/30xx/40xx) puedes acelerar la transcripción **5–10×** instalando los wheels de CUDA:
+Por defecto Heimdall usa la **CPU** (funciona siempre). Si tienes una GPU NVIDIA reciente (RTX 20xx/30xx/40xx) puedes acelerar la transcripción **5–10×** instalando los wheels de CUDA:
 ```powershell
 py -3 -m pip install nvidia-cublas-cu12 nvidia-cudnn-cu12 nvidia-cuda-runtime-cu12
 ```
@@ -218,6 +224,9 @@ mediaforge\
 ├── converter.py       # Módulo 2: conversión de vídeo/audio
 ├── analyzer.py        # Módulo 3: correlación multimodal + PDF enriquecido
 ├── report.py          # Mini-informes al final de cada operación
+├── branding/          # Ícono de Heimdall: heimdall.svg (fuente) + .png, .ico, .icns
+├── tools/
+│   └── build_icons.sh # Regenera los íconos desde el SVG
 ├── requirements.txt   # Dependencias Python
 ├── run.bat            # Arranque en Windows (instala deps + lanza main.py)
 ├── .gitignore         # Exclusiones para git
@@ -251,6 +260,11 @@ mediaforge\
 - **Enriquecida**: sin OCR (no lee el texto que aparece en pantalla; solo guarda la imagen). Ver roadmap v2.
 
 ## 📝 Historial de cambios
+
+### v2.1 — Ahora se llama Heimdall
+- **Nombre nuevo**: la app pasa de MediaForge a **Heimdall** (ventana, barra lateral, PDF generado, `run.bat` y documentación). El repositorio sigue siendo `mediaforge`.
+- **Ícono propio**: casco con cresta, guarda nasal y carrilleras sobre un fondo azul noche, en el azul claro de la app. Aparece en la ventana, el Dock/barra de tareas y junto al nombre en la barra lateral.
+- **Íconos versionados** en `branding/`: `heimdall.svg` es la fuente; `heimdall.png` (ventana y Dock), `heimdall.ico` (Windows, 16–256 px) y `heimdall.icns` (macOS) se regeneran con `sh tools/build_icons.sh`.
 
 ### v2.0 — Interfaz nueva
 - **Barra lateral con dos herramientas** en vez de 4 pestañas: "Transcribir reunión" une el transcriptor y la transcripción enriquecida (eliges "Documento con capturas" o "Solo texto"); "Convertir vídeo" es el conversor.
@@ -365,7 +379,7 @@ Tres sub-ideas, todas opcionales y configurables. El usuario activa solo las que
 - **Qué añade**: si el usuario lo configura, se puede enviar el `.txt` final a un LLM externo (Claude, OpenAI, Gemini) para un resumen de mayor calidad.
 - **Por qué importa**: los modelos locales de 8B no son tan buenos como GPT-4/Claude. Para resúmenes profesionales, una API puede merecer la pena.
 - **Cómo se haría**:
-  - Variable de entorno `MEDIAFORGE_API_KEY` (Claude / OpenAI)
+  - Variable de entorno `HEIMDALL_API_KEY` (Claude / OpenAI)
   - Campo opcional en la pestaña "Enriquecida" con el modelo a usar
   - La app **deja claro en la UI** que el contenido se envía a un servicio externo, y solo lo hace si el usuario lo activa explícitamente
 - **Privacidad**: ⚠️ los datos salen del PC. Documentar bien este punto en la UI.

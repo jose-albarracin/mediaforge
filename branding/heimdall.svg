@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Heimdall app icon. Source of truth: render with tools/build_icons.sh -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#17325F"/>
+      <stop offset="0.6" stop-color="#0E2147"/>
+      <stop offset="1" stop-color="#091630"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.42" r="0.5">
+      <stop offset="0" stop-color="#6AA6F8" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#6AA6F8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.18"/>
+      <stop offset="0.1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="metal" gradientUnits="userSpaceOnUse" x1="0" y1="290" x2="0" y2="852">
+      <stop offset="0" stop-color="#CFE4FF"/>
+      <stop offset="0.45" stop-color="#8BBCFB"/>
+      <stop offset="1" stop-color="#4C86DE"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="14"/>
+      <feOffset dy="16" result="b"/>
+      <feFlood flood-color="#030A1A" flood-opacity="0.5"/>
+      <feComposite in2="b" operator="in"/>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#bg)"/>
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#glow)"/>
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#rim)"/>
+
+  <!-- Helmet: dome split by a crown notch, nasal guard, chevron visor,
+       cheek guards parted down the middle. Shifted up to sit optically
+       centred in the tile. -->
+  <g filter="url(#shadow)" fill="url(#metal)" transform="translate(0 -44)">
+    <!-- dome halves (gap at the crown, like the original mark) -->
+    <path d="M488 290 A214 214 0 0 0 298 500 L488 500 Z"/>
+    <path d="M536 290 A214 214 0 0 1 726 500 L536 500 Z"/>
+    <!-- nasal guard -->
+    <path d="M494 350 L530 350 L530 652 L512 674 L494 652 Z"/>
+    <!-- cheek guards: chevron top edge, rounded jaw, split at the chin -->
+    <path d="M298 548 L482 604 L482 664 L470 852 L452 852 L336 786
+             C312 772 298 750 298 722 Z"/>
+    <path d="M726 548 L542 604 L542 664 L554 852 L572 852 L688 786
+             C712 772 726 750 726 722 Z"/>
+  </g>
+</svg>

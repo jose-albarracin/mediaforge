@@ -1,4 +1,4 @@
-"""MediaForge: desktop shell.
+"""Heimdall: desktop shell.
 
 Two tools in a sidebar:
   - Transcribir reunión: one flow that produces either a PDF with
@@ -29,8 +29,9 @@ from report import fmt_duration, probe_duration
 from transcriber import CancelledError as TranscribeCancelled
 from transcriber import ComputeSupport, check_ffmpeg, detect_compute, transcribe_video
 
-APP_NAME = "MediaForge"
-APP_VERSION = "2.0"
+APP_NAME = "Heimdall"
+BRANDING = Path(__file__).parent / "branding"
+APP_VERSION = "2.1"
 
 # ---- Options (label shown, value passed to the engine) ------------------------
 MODELS = [
@@ -535,11 +536,19 @@ class Sidebar(ctk.CTkFrame):
         self._on_select = on_select
         self._buttons: dict[str, ctk.CTkButton] = {}
 
-        ctk.CTkLabel(self, text=APP_NAME, font=ui.font(18, "bold"), text_color=ui.TEXT,
-                     anchor="w").pack(fill="x", padx=20, pady=(22, 0))
+        brand = ctk.CTkFrame(self, fg_color="transparent")
+        brand.pack(fill="x", padx=18, pady=(20, 0))
+        logo = BRANDING / "heimdall.png"
+        if logo.exists():
+            from PIL import Image
+            self._logo = ctk.CTkImage(Image.open(logo), size=(40, 40))
+            ctk.CTkLabel(brand, image=self._logo, text="").pack(side="left",
+                                                                padx=(0, 10))
+        ctk.CTkLabel(brand, text=APP_NAME, font=ui.font(20, "bold"), text_color=ui.TEXT,
+                     anchor="w").pack(side="left")
         ctk.CTkLabel(self, text="Todo se procesa en tu equipo", font=ui.font(12),
                      text_color=ui.TEXT_MUTED, anchor="w").pack(fill="x", padx=20,
-                                                                 pady=(2, 22))
+                                                                 pady=(10, 22))
 
         # Hardware details live in each page's advanced options, where they
         # explain a choice. Here only the appearance switch and the version.
@@ -578,6 +587,7 @@ class App(ctk.CTk):
         ctk.set_appearance_mode("system")
         super().__init__(fg_color=ui.CONTENT_BG)
         self.title(APP_NAME)
+        self._set_icon()
         self.geometry("1040x760")
         self.minsize(860, 620)
 
@@ -604,6 +614,16 @@ class App(ctk.CTk):
         if not ffmpeg_ok:
             self.pages["transcribe"].fail(
                 "No se encontró ffmpeg. Instálalo (ver README) y vuelve a abrir la app.")
+
+    def _set_icon(self) -> None:
+        """Window/taskbar icon (Windows uses the .ico, the rest the .png)."""
+        ico, png = BRANDING / "heimdall.ico", BRANDING / "heimdall.png"
+        if sys.platform == "win32" and ico.exists():
+            self.iconbitmap(str(ico))
+        elif png.exists():
+            from tkinter import PhotoImage
+            self._icon = PhotoImage(file=str(png))  # keep a reference
+            self.iconphoto(True, self._icon)  # on macOS this is the Dock icon
 
     def show(self, key: str) -> None:
         for k, page in self.pages.items():
