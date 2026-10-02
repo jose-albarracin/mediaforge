@@ -96,6 +96,17 @@ def _ffmpeg() -> Optional[str]:
     return shutil.which("ffmpeg")
 
 
+# Variable-frame-rate output for `select` filters. `-vsync` was deprecated
+# in ffmpeg 5.1 and REMOVED in ffmpeg 7+ ("Unrecognized option 'vsync'"),
+# which made the scene and hybrid modes fail on any current ffmpeg build.
+# `-fps_mode` exists since ffmpeg 5.1.
+_VFR_ARGS = ("-fps_mode", "vfr")
+
+
+class FrameCompressionError(RuntimeError):
+    """A frame could not be re-encoded to JPEG."""
+
+
 # Note: probe_duration is imported from report.py (shared helper).
 
 
@@ -136,8 +147,8 @@ def extract_keyframes(
         scene_threshold = MAX_SCENE_THRESHOLD
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    # clean previous run
-    for old in output_dir.glob("frame_*.png"):
+    # clean previous run (frames end up as .jpg after compression)
+    for old in [*output_dir.glob("frame_*.png"), *output_dir.glob("frame_*.jpg")]:
         try:
             old.unlink()
         except OSError:
@@ -151,7 +162,7 @@ def extract_keyframes(
         cmd = [
             ffmpeg, "-y", "-i", str(input_path),
             "-vf", f"select='{expr}',showinfo",
-            "-vsync", "vfr",
+            *_VFR_ARGS,
             str(pattern),
         ]
     elif mode == "interval":
@@ -176,7 +187,7 @@ def extract_keyframes(
         cmd = [
             ffmpeg, "-y", "-i", str(input_path),
             "-vf", f"select='{expr}',showinfo",
-            "-vsync", "vfr",
+            *_VFR_ARGS,
             str(pattern),
         ]
 
@@ -190,7 +201,18 @@ def extract_keyframes(
     # before giving up. Many screen-share recordings have a max score
     # in the 0.01-0.10 range and would return zero with default settings.
     SCENE_FLOOR = 0.01
-    if not files and mode == "scene" and scene_threshold > SCENE_FLOOR:
+    if not files and mode == "hybrid" and proc.returncode == 0:
+        log("[i] El modo hibrido no produjo frames. Reintentando con "
+            f"intervalo fijo cada {interval_s:g}s...")
+        cmd2 = [
+            ffmpeg, "-y", "-i", str(input_path),
+            "-vf", f"fps=1/{interval_s:g},showinfo",
+            str(pattern),
+        ]
+        proc = subprocess.run(cmd2, capture_output=True, text=True)
+        files = sorted(output_dir.glob("frame_*.png"))
+    if (not files and mode == "scene" and proc.returncode == 0
+            and scene_threshold > SCENE_FLOOR):
         log(f"[i] Threshold {scene_threshold:g} no encontro cambios. "
             f"Reintentando con el minimo ({SCENE_FLOOR:g}) para no "
             f"quedarnos sin nada...")
@@ -198,7 +220,7 @@ def extract_keyframes(
         cmd2 = [
             ffmpeg, "-y", "-i", str(input_path),
             "-vf", f"select='gt(scene\\,{retry:g})',showinfo",
-            "-vsync", "vfr",
+            *_VFR_ARGS,
             str(pattern),
         ]
         # Clean the would-be output before retry.
@@ -213,6 +235,13 @@ def extract_keyframes(
             log(f"[OK] Fallback: {len(files)} frames con threshold "
                 f"{retry:g}. (Tu video tiene cambios visuales muy sutiles; "
                 f"considera usar modo 'Intervalo fijo' para mas cobertura.)")
+
+    if not files and proc.returncode != 0:
+        tail = "\n".join(proc.stderr.splitlines()[-15:])
+        raise RuntimeError(
+            f"ffmpeg fallo al extraer frames (codigo {proc.returncode}, "
+            f"modo={mode}).\nDetalle tecnico:\n{tail}"
+        )
 
     if not files:
         tail = "\n".join(proc.stderr.splitlines()[-15:])
@@ -232,8 +261,11 @@ def extract_keyframes(
         )
 
     # Parse `pts_time:NNN` from stderr — one entry per selected frame.
-    pts_re = re.compile(r"pts_time:([\d.]+)")
+    pts_re = re.compile(r"pts_time:(-?[\d.]+)")
     times = [float(m) for m in pts_re.findall(proc.stderr)]
+    if len(times) != len(files):
+        log(f"[!] ffmpeg reporto {len(times)} timestamps para {len(files)} "
+            "frames; los que falten se estiman por intervalo.")
 
     # Pair by order. showinfo emits one line per selected frame, in the
     # same order ffmpeg writes the files.
@@ -256,9 +288,17 @@ def extract_keyframes(
         f"preset={image_quality})...")
     total_in = sum(p.stat().st_size for p in files)
     compressed: list[KeyFrame] = []
+    failed = 0
     for kf in frames:
-        new_path = _compress_to_jpeg(kf.path, max_px=1280, quality=q_int)
+        try:
+            new_path = _compress_to_jpeg(kf.path, max_px=1280, quality=q_int)
+        except FrameCompressionError as exc:
+            failed += 1
+            log(f"[!] No se pudo comprimir {exc}; se conserva el PNG.")
+            new_path = kf.path
         compressed.append(KeyFrame(time=kf.time, path=new_path))
+    if failed:
+        log(f"[!] {failed} de {len(frames)} frames quedaron sin comprimir.")
     frames = compressed
     total_out = sum(p.stat().st_size for p in (kf.path for kf in frames) if p.exists())
     if total_in > 0:
@@ -483,10 +523,7 @@ def _compress_to_jpeg(
         JPEG q=85       -> ~120 KB  (~12x smaller, recommended)
         JPEG q=75       -> ~ 60 KB  (~25x smaller, slight softness)
     """
-    try:
-        from PIL import Image
-    except Exception:
-        return path
+    from PIL import Image
     try:
         with Image.open(path) as im:
             # JPEG can't store alpha — flatten to white background.
@@ -517,15 +554,18 @@ def _compress_to_jpeg(
                 except OSError:
                     pass
             return jpg_path
-    except Exception:
-        return path
+    except OSError as exc:
+        raise FrameCompressionError(f"{path.name}: {exc}") from exc
 
 
 def _resize_image(path: Path, max_px: int = 1280) -> Path:
     """Backward-compatible alias. See `_compress_to_jpeg` for new behaviour.
     New callers should use `_compress_to_jpeg(path, max_px, quality)` directly.
     """
-    return _compress_to_jpeg(path, max_px=max_px, quality=85)
+    try:
+        return _compress_to_jpeg(path, max_px=max_px, quality=85)
+    except FrameCompressionError:
+        return path
 
 
 def _fmt_time(seconds: float) -> str:
@@ -539,8 +579,8 @@ def _fmt_time(seconds: float) -> str:
 
 # ---- Font handling --------------------------------------------------------
 # DejaVu Sans is the universal Unicode font shipped with Linux distros.
-# run.bat downloads DejaVuSans.ttf + DejaVuSans-Bold.ttf into assets/
-# the first time the app is launched. If both are present, we use them
+# It is NOT downloaded automatically: the user drops DejaVuSans.ttf (and
+# optionally DejaVuSans-Bold.ttf) into assets/. If present, we use them
 # (covers ~50k glyphs including Spanish accents, Japanese, Chinese,
 # Korean, Cyrillic, Greek, Arabic, etc.). If absent, we fall back to
 # the built-in Helvetica + char-stripping, which keeps the app working
@@ -554,18 +594,15 @@ def _try_register_unicode_fonts(pdf) -> bool:
     """Register DejaVu Sans + Bold as Unicode fonts. Returns True if both
     were registered successfully; False if we have to fall back to
     Helvetica."""
-    try:
-        if not _FONT_REGULAR.exists():
-            return False
-        pdf.add_font("DejaVu", "", str(_FONT_REGULAR), uni=True)
-        if _FONT_BOLD.exists():
-            pdf.add_font("DejaVu", "B", str(_FONT_BOLD), uni=True)
-        else:
-            # Use regular for bold too (visible difference is small).
-            pdf.add_font("DejaVu", "B", str(_FONT_REGULAR), uni=True)
-        return True
-    except Exception:
+    if not _FONT_REGULAR.exists():
         return False
+    bold = _FONT_BOLD if _FONT_BOLD.exists() else _FONT_REGULAR
+    # The PDF uses regular, bold AND italic (error notes, page footer).
+    # Without an italic face fpdf2 raises "Undefined font: dejavuI".
+    pdf.add_font("DejaVu", "", str(_FONT_REGULAR))
+    pdf.add_font("DejaVu", "B", str(bold))
+    pdf.add_font("DejaVu", "I", str(_FONT_REGULAR))
+    return True
 
 
 def _safe_for_latin1(text: str) -> str:
@@ -618,11 +655,21 @@ def build_enriched_pdf(
     from fpdf import FPDF
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Resize images first so the PDF stays small
-    for b in blocks:
-        _resize_image(b.frame_path)
+    # Frames were already compressed to JPEG by extract_keyframes();
+    # re-encoding them here would add a second lossy pass.
+    class _PDF(FPDF):
+        # fpdf2 calls footer() on every page, outside the auto-page-break
+        # logic. Drawing the footer by hand at set_y(-12) fell inside the
+        # 15 mm break margin, so every block spawned an extra page holding
+        # only "Página N/M" and the page count doubled.
+        footer_font = "Helvetica"
 
-    pdf = FPDF(format="A4")
+        def footer(self) -> None:
+            self.set_y(-12)
+            self.set_font(self.footer_font, "I", 8)
+            self.cell(0, 6, f"Página {self.page_no()}/{{nb}}", align="C")
+
+    pdf = _PDF(format="A4")
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.alias_nb_pages()
 
@@ -632,12 +679,13 @@ def build_enriched_pdf(
     use_unicode = _try_register_unicode_fonts(pdf)
     if use_unicode:
         font = "DejaVu"
+        pdf.footer_font = font
         log("[OK] Usando fuente Unicode (DejaVu Sans).")
     else:
         font = "Helvetica"
         log("[!] assets/DejaVuSans.ttf no encontrada - usando Helvetica. "
             "Caracteres fuera de Latin-1 seran reemplazados por '?'. "
-            "Vuelve a lanzar run.bat para descargarla.")
+            "Para soporte Unicode copia DejaVuSans.ttf en la carpeta assets/.")
 
     def _safe(text: str) -> str:
         """Strip characters that the active font can't render."""
@@ -649,10 +697,10 @@ def build_enriched_pdf(
     pdf.add_page()
     # Title page
     pdf.set_font(font, "B", 18)
-    pdf.cell(0, 12, _safe(title), ln=1, align="C")
+    pdf.cell(0, 12, _safe(title), new_x="LMARGIN", new_y="NEXT", align="C")
     pdf.set_font(font, "", 11)
     pdf.cell(0, 6, _safe(f"Generado por MediaForge · {len(blocks)} bloques"),
-             ln=1, align="C")
+             new_x="LMARGIN", new_y="NEXT", align="C")
     pdf.ln(6)
 
     # Iterate blocks
@@ -663,33 +711,28 @@ def build_enriched_pdf(
         # Header: timestamp + index
         pdf.set_font(font, "B", 13)
         pdf.cell(0, 7, _safe(f"[{_fmt_time(b.time)}]   bloque {idx}/{len(blocks)}"),
-                 ln=1)
+                 new_x="LMARGIN", new_y="NEXT")
 
         # Image (max width = 180mm in A4 with 15mm margins)
         try:
             pdf.image(str(b.frame_path), w=180)
-        except Exception as exc:
+        except (OSError, ValueError, RuntimeError) as exc:
             pdf.set_font(font, "I", 10)
             pdf.cell(0, 6, _safe(f"(no se pudo incrustar la imagen: {exc})"),
-                     ln=1)
+                     new_x="LMARGIN", new_y="NEXT")
 
         pdf.ln(3)
 
         # Transcript
         pdf.set_font(font, "B", 11)
         pdf.cell(0, 6, _safe(f"Transcripción ({b.segment_count} segmentos):"),
-                 ln=1)
+                 new_x="LMARGIN", new_y="NEXT")
         pdf.set_font(font, "", 11)
         # Strip Whisper's CJK hallucinations before rendering. Keeps the
         # transcription meaningful (no "..." substitution that breaks
         # readability) while preventing unreadable character blocks in
         # the PDF.
         pdf.multi_cell(0, 6, _safe(_strip_cjk(b.transcript_text)))
-
-        # Footer (page number)
-        pdf.set_y(-12)
-        pdf.set_font(font, "I", 8)
-        pdf.cell(0, 6, f"Página {pdf.page_no()}/{{nb}}", align="C")
 
     pdf.output(str(output_path))
 
@@ -759,8 +802,6 @@ def enrich_video(
     # phase produced output, so the report always has the full table.
     timings: dict[str, float] = {}
     frames_before_dedup = 0
-    n_segments = 0
-    audio_duration = 0.0
 
     t_total = time.monotonic()
     in_duration = probe_duration(input_path)
@@ -784,7 +825,6 @@ def enrich_video(
         t = time.monotonic()
         segments = transcribe_with_timestamps(
             wav, model_size, language, log, cancel_flag, device=device)
-        n_segments = len(segments)
         if cancel_flag():
             raise CancelledError()
         timings["Transcripción"] = time.monotonic() - t
@@ -854,15 +894,7 @@ def enrich_video(
         log(f"  [OK] TXT: {txt_path}")
         out_files.append(("TXT", txt_path))
     if not keep_frames:
-        for f in frames_dir.glob("frame_*.png"):
-            try:
-                f.unlink()
-            except OSError:
-                pass
-        try:
-            frames_dir.rmdir()
-        except OSError:
-            pass
+        shutil.rmtree(frames_dir, ignore_errors=True)
 
     progress(1.0)
     log("[OK] Enriquecimiento completado.")

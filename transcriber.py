@@ -115,6 +115,7 @@ class ComputeSupport:
     """
     cuda_available: bool = False
     cuda_device_count: int = 0
+    reason: str = ""   # why CUDA is unavailable, when detection failed
 
     @property
     def has_cuda(self) -> bool:
@@ -144,8 +145,9 @@ def detect_compute() -> ComputeSupport:
             cuda_available=count > 0,
             cuda_device_count=count,
         )
-    except Exception:
-        return ComputeSupport(cuda_available=False, cuda_device_count=0)
+    except Exception as exc:  # noqa: BLE001 — any failure means "no CUDA"
+        return ComputeSupport(cuda_available=False, cuda_device_count=0,
+                              reason=f"{type(exc).__name__}: {exc}")
 
 
 def check_ffmpeg() -> tuple[bool, str]:
@@ -311,8 +313,6 @@ def _run_inference(
             log(f"  [{i:>4}] {segment.start:7.2f}s → {segment.end:7.2f}s  {preview}")
     return "\n".join(chunks), info, n
 
-    return "\n".join(chunks)
-
 
 def transcribe_video(
     input_path: Path,
@@ -359,7 +359,7 @@ def transcribe_video(
         t_load = time.monotonic() - t
 
         # -- Phase 3: run inference
-        log(f"[3/3] Transcribiendo…")
+        log("[3/3] Transcribiendo…")
         t = time.monotonic()
         text, info, n_segments = _run_inference(
             model, wav_path, language, log, cancel_flag,

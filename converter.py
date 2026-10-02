@@ -12,7 +12,6 @@ Public API:
 """
 from __future__ import annotations
 
-import os
 import re
 import shutil
 import subprocess
@@ -190,6 +189,7 @@ def convert(
         else:
             encoder_label = encoder
 
+    cmd[0] = _ffmpeg_path() or cmd[0]
     log("$ " + " ".join(f'"{c}"' if " " in c else c for c in cmd))
 
     t_total = time.monotonic()
@@ -203,6 +203,7 @@ def convert(
 
     out_time_us: Optional[int] = None
     last_pct_logged = -1.0
+    tail: list[str] = []   # last ffmpeg lines, for the error message
     try:
         assert proc.stdout is not None
         for raw in proc.stdout:
@@ -213,7 +214,7 @@ def convert(
             if not line:
                 continue
 
-            if output_kind == "mp4" and line.startswith("out_time_us="):
+            if line.startswith("out_time_us="):
                 try:
                     out_time_us = int(line.split("=", 1)[1])
                     if progress and duration and duration > 0:
@@ -227,8 +228,9 @@ def convert(
                     pass
                 continue
 
-            if line.startswith("progress="):
-                continue  # handled by out_time_us / end events
+            if "=" in line and " " not in line:
+                continue  # other -progress key=value lines
+            tail = (tail + [line])[-12:]
             # surface other ffmpeg output (errors etc.)
             if "error" in line.lower() or "warning" in line.lower():
                 log(f"  {line}")
@@ -239,10 +241,15 @@ def convert(
             proc.wait(timeout=3)
         except subprocess.TimeoutExpired:
             proc.kill()
+            proc.wait()
+        _remove_partial(output_path)
         raise
 
     if proc.returncode != 0:
-        raise RuntimeError(f"ffmpeg terminó con código {proc.returncode}.")
+        _remove_partial(output_path)
+        detail = "\n".join(tail)
+        raise RuntimeError(
+            f"ffmpeg terminó con código {proc.returncode}.\n{detail}")
     if progress:
         progress(1.0)
     log(f"✓ Guardado: {output_path}")
@@ -304,11 +311,23 @@ def _video_cmd(input_path: Path, output_path: Path, encoder: str,
     ]
 
 
+def _remove_partial(path: Path) -> None:
+    """Delete a half-written output so it isn't mistaken for a result."""
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
 def _mp3_cmd(input_path: Path, output_path: Path, quality: str) -> list[str]:
     # libmp3lame VBR: -q:a 0=best..9=worst. 2 ≈ 190 kbps.
     q = {"baja": "5", "media": "2", "alta": "0"}.get(quality.lower(), "2")
+    # -progress is what makes the progress bar AND cancellation work: without
+    # it ffmpeg only prints \r-terminated stats to stderr, the line reader
+    # blocks until the end, and "Cancelar" does nothing until ffmpeg exits.
     return [
         "ffmpeg", "-y",
+        "-progress", "pipe:1", "-nostats",
         "-i", str(input_path),
         "-vn",                       # no video
         "-c:a", "libmp3lame",

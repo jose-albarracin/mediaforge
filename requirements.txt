@@ -1,4 +1,8 @@
 faster-whisper>=1.0.0
+# PyAV 19 removed the `metadata_errors` argument that faster-whisper
+# (<= 1.2.1) passes to av.open(); every transcription failed with
+# "TypeError: open() got an unexpected keyword argument 'metadata_errors'".
+av>=11,<19
 customtkinter>=5.2.0
 fpdf2>=2.7.0
 Pillow>=10.0.0

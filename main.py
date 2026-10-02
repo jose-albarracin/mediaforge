@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import queue
+import subprocess
 import sys
 import threading
 from pathlib import Path
@@ -34,6 +35,21 @@ from transcriber import ComputeSupport, check_ffmpeg, detect_compute, transcribe
 
 APP_NAME = "MediaForge"
 APP_VERSION = "1.0"
+
+def _open_path(path) -> None:
+    """Open a file or folder with the OS default app.
+
+    ``os.startfile`` only exists on Windows; calling it on macOS/Linux
+    raised AttributeError and the "Abrir" buttons crashed there.
+    """
+    path = str(path)
+    if sys.platform == "win32":
+        os.startfile(path)  # noqa: S606
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", path])
+    else:
+        subprocess.Popen(["xdg-open", path])
+
 
 # ---- Transcriber constants ------------------------------------------------
 T_MODELS = ["tiny", "base", "small", "medium", "large-v3"]
@@ -343,7 +359,9 @@ class TranscriberTab(ctk.CTkFrame):
         except TranscribeCancelled:
             self._msg_queue.put(("cancelled", ""))
         except Exception as exc:  # noqa: BLE001
-            self._msg_queue.put(("error", str(exc)))
+            import traceback as _tb
+            self._msg_queue.put((
+                "error", f"{type(exc).__name__}: {exc}\n{_tb.format_exc()}"))
 
     def _cancel(self) -> None:
         if self._worker and self._worker.is_alive():
@@ -353,7 +371,7 @@ class TranscriberTab(ctk.CTkFrame):
     def _open_folder(self) -> None:
         target = self._last_output_dir
         if target and target.exists():
-            os.startfile(str(target))
+            _open_path((target))
         else:
             self._log("No hay carpeta de salida reciente.")
 
@@ -697,7 +715,9 @@ class ConverterTab(ctk.CTkFrame):
         except ConvertCancelled:
             self._msg_queue.put(("cancelled", ""))
         except Exception as exc:  # noqa: BLE001
-            self._msg_queue.put(("error", str(exc)))
+            import traceback as _tb
+            self._msg_queue.put((
+                "error", f"{type(exc).__name__}: {exc}\n{_tb.format_exc()}"))
 
     def _cancel(self) -> None:
         if self._worker and self._worker.is_alive():
@@ -707,7 +727,7 @@ class ConverterTab(ctk.CTkFrame):
     def _open_folder(self) -> None:
         target = self._last_output_dir
         if target and target.exists():
-            os.startfile(str(target))
+            _open_path((target))
         else:
             self._log("No hay carpeta de salida reciente.")
 
@@ -1232,14 +1252,14 @@ class EnrichedTab(ctk.CTkFrame):
 
     def _open_pdf(self) -> None:
         if self._last_pdf and self._last_pdf.exists():
-            os.startfile(str(self._last_pdf))
+            _open_path((self._last_pdf))
         else:
             self._log("No hay PDF generado todavía.")
 
     def _open_folder(self) -> None:
         target = self._last_output_dir
         if target and target.exists():
-            os.startfile(str(target))
+            _open_path((target))
         else:
             self._log("No hay carpeta de salida reciente.")
 
@@ -1308,6 +1328,9 @@ class App(ctk.CTk):
             )
         else:
             compute_status = "GPU transcripción: no detectada (CPU only)"
+            if self._compute.reason:
+                print(f"[i] CUDA no disponible: {self._compute.reason}",
+                      flush=True)
 
         # Tabview
         self.tabs = ctk.CTkTabview(self)

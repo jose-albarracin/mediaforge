@@ -33,10 +33,10 @@ if errorlevel 1 (
 
 echo.
 echo [3/4] Verificando dependencias Python...
-py -3 -c "import faster_whisper, customtkinter" >nul 2>nul
+py -3 -c "import faster_whisper, customtkinter, fpdf, PIL, imagehash" >nul 2>nul
 if errorlevel 1 (
-    echo   Instalando dependencias (primera vez)...
-    py -3 -m pip install --upgrade pip >nul 2>n1
+    echo   Instalando dependencias ^(primera vez^)...
+    py -3 -m pip install --upgrade pip >nul 2>nul
     py -3 -m pip install -r requirements.txt
     if errorlevel 1 (
         echo   X  Fallo la instalacion de dependencias.
@@ -52,27 +52,30 @@ REM nvidia-cublas-cu12 / nvidia-cudnn-cu12 / nvidia-cuda-runtime-cu12
 REM no estan instalados, los instalamos automaticamente. Esto evita el
 REM error "cublas64_12.dll is not found or cannot be loaded" que sale
 REM cuando ctranslate2 intenta usar la GPU sin las DLLs disponibles.
-where nvidia-smi >nul 2>n1
+where nvidia-smi >nul 2>nul
 if not errorlevel 1 (
-    py -3 -c "import nvidia.cublas" >nul 2>n1
+    py -3 -c "import nvidia.cublas" >nul 2>nul
     if errorlevel 1 (
         echo.
-        echo   GPU NVIDIA detectada. Instalando wheels de CUDA
-        echo   (cuBLAS + cuDNN + runtime, ~1.4 GB) para soporte GPU...
+        echo   GPU NVIDIA detectada. Para transcribir por GPU hacen falta
+        echo   los wheels de CUDA ^(cuBLAS + cuDNN + runtime, ~1.4 GB^).
+        choice /C SN /N /M "  Descargarlos ahora? [S/N]: "
+        if errorlevel 2 goto :skip_cuda
         echo.
         py -3 -m pip install nvidia-cublas-cu12 nvidia-cudnn-cu12 nvidia-cuda-runtime-cu12
         if errorlevel 1 (
             echo   !  No se pudieron instalar los wheels CUDA. La app
-            echo      usara CPU (la transcripcion sigue funcionando).
+            echo      usara CPU ^(la transcripcion sigue funcionando^).
         ) else (
             echo   OK wheels CUDA instalados. La transcripcion por GPU
-            echo      estara disponible (mas rapida).
+            echo      estara disponible ^(mas rapida^).
         )
     ) else (
         echo   OK wheels CUDA ya instalados.
     )
 )
 
+:skip_cuda
 REM [Opcional] Si en el futuro quieres soporte Unicode completo (PDF con
 REM japones, arabe, cirilico, etc.), descarga DejaVuSans.ttf y
 REM DejaVuSans-Bold.ttf en la carpeta assets\. Hasta entonces, la app
