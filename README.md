@@ -178,6 +178,16 @@ python3 -m venv .venv
 
 Los botones "Abrir PDF" y "Abrir carpeta" usan `open` en macOS y `xdg-open` en Linux.
 
+#### macOS: crear `Heimdall.app` (recomendado)
+
+Si abres la app con `python main.py`, macOS la ejecuta dentro de `Python.app`: el menú dice "Python" y al abrir y al cerrar el Dock muestra el cohete de Python. Para que siempre aparezcan el nombre y el ícono de Heimdall, crea la app una vez:
+
+```bash
+sh tools/build_macos_app.sh --install
+```
+
+Queda en `~/Applications/Heimdall.app` y se abre desde Launchpad, Spotlight o el Dock (puedes fijarla con "Mantener en el Dock"). La app no copia el código: ejecuta `main.py` y el `.venv` de esta carpeta, así que un `git pull` la actualiza. Si mueves la carpeta o recreas el `.venv` con otra versión de Python, vuelve a correr el script.
+
 > 💡 **Entorno virtual (`.venv`)**: está ignorado por `.gitignore`, así que puedes crearlo sin miedo. Si no quieres usarlo, sáltate los pasos 2 y simplemente usa tu Python global.
 
 ### Soporte GPU opcional (NVIDIA)
@@ -226,7 +236,8 @@ mediaforge\
 ├── report.py          # Mini-informes al final de cada operación
 ├── branding/          # Ícono de Heimdall: heimdall.svg (fuente) + .png, .ico, .icns
 ├── tools/
-│   └── build_icons.sh # Regenera los íconos desde el SVG
+│   ├── build_icons.sh       # Regenera los íconos desde el SVG
+│   └── build_macos_app.sh   # Crea Heimdall.app (macOS) con nombre e ícono propios
 ├── requirements.txt   # Dependencias Python
 ├── run.bat            # Arranque en Windows (instala deps + lanza main.py)
 ├── .gitignore         # Exclusiones para git
@@ -264,6 +275,7 @@ mediaforge\
 ### v2.1 — Ahora se llama Heimdall
 - **Nombre nuevo**: la app pasa de MediaForge a **Heimdall** (ventana, barra lateral, PDF generado, `run.bat` y documentación). El repositorio sigue siendo `mediaforge`.
 - **Ícono propio**: casco con cresta, guarda nasal y carrilleras sobre un fondo azul noche, en el azul claro de la app. Aparece en la ventana, el Dock/barra de tareas y junto al nombre en la barra lateral.
+- **`Heimdall.app` para macOS** (`sh tools/build_macos_app.sh --install`): con `python main.py` el Dock mostraba el cohete de Python al abrir y al cerrar, y el menú decía "Python"; desde la app siempre se ven el nombre y el ícono de Heimdall.
 - **Íconos versionados** en `branding/`: `heimdall.svg` es la fuente; `heimdall.png` (ventana y Dock), `heimdall.ico` (Windows, 16–256 px) y `heimdall.icns` (macOS) se regeneran con `sh tools/build_icons.sh`.
 
 ### v2.0 — Interfaz nueva
