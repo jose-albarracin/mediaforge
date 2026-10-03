@@ -6,7 +6,7 @@
 
 > Antes se llamaba **MediaForge**. El repositorio conserva el nombre `mediaforge`; la app, la ventana y la documentación se llaman Heimdall desde la v2.1.
 
-Centro multimedia local para Windows, macOS y Linux: transcribe audio/vídeo a texto, convierte entre formatos populares y genera **documentos PDF enriquecidos** con capturas de pantalla sincronizadas a la transcripción. Todo con la mayor calidad y velocidad que tu hardware permita (incluyendo GPU NVIDIA / AMD / Intel cuando están disponibles).
+Centro multimedia local para Windows, macOS y Linux: transcribe audio/vídeo a texto, convierte entre formatos populares, genera **documentos PDF enriquecidos** con capturas de pantalla sincronizadas a la transcripción y, en macOS, **graba una clase o reunión mientras la ves** en el navegador para crear ese mismo documento. Todo con la mayor calidad y velocidad que tu hardware permita (incluyendo GPU NVIDIA / AMD / Intel cuando están disponibles).
 
 > Sin nube, sin marcas de agua, sin límites artificiales. 100% local.
 
@@ -49,9 +49,9 @@ Una ventana con barra lateral y tres herramientas: **Transcribir reunión**, **G
 ### 🎥 Grabar clase (macOS 13 o más nuevo)
 Graba lo que se ve y se escucha en **una ventana** (por ejemplo, el navegador con la clase) y al terminar crea el mismo documento con capturas, o solo el texto. **No descarga nada de la página**: registra lo que sale por tu pantalla y tus parlantes, como la grabación de pantalla del sistema.
 
-1. Abre la clase en el navegador y dale play.
+1. Abre la clase en el navegador (déjala lista, en pausa si quieres).
 2. En **Grabar clase** elige la ventana (pulsa **Actualizar** si no aparece).
-3. Opcional: **Probar 10 s** para saber antes si la plataforma deja grabarla.
+3. Opcional: dale play y pulsa **Probar 10 s** para saber antes si la plataforma deja grabarla.
 4. Pulsa **Grabar**. Empieza una **cuenta regresiva de 10 s** (se ve grande en la barra de abajo y como número en el ícono del Dock): ve a la clase y dale play. Al llegar a 0 empieza a grabar y el Dock muestra el tiempo grabado.
 5. Mira la clase y al final pulsa **Detener y crear**.
 
@@ -62,7 +62,7 @@ No hay límite para darle play: si empieza a grabar con la clase en pausa, Heimd
   - **Solo se puede grabar el audio** → la imagen sale negra; se crea solo la transcripción.
   - **No llega el sonido** → revisa que la pestaña no esté silenciada; si sigue igual, la plataforma protege el audio.
   - **Esta clase no se puede grabar** → imagen negra y sin sonido. Detén la grabación y usa la transcripción o los subtítulos de la plataforma.
-  - **La clase parece estar en pausa** → sin sonido ni movimiento; dale play y prueba otra vez.
+  - **La clase parece estar en pausa** → sin sonido ni movimiento; dale play (la grabación sigue y el aviso desaparece solo).
 
   Heimdall **solo detecta** la protección; no intenta saltársela.
 - Se graba solo esa ventana y el sonido de su aplicación: puedes usar otras ventanas mientras tanto (las notificaciones de otras apps no entran), pero no cierres ni minimices la de la clase. Si la cierras, se conserva lo grabado hasta ese momento.
@@ -125,7 +125,7 @@ Necesitas **tres cosas** instaladas en tu sistema antes de poder ejecutar Heimda
 
 ### 1. Sistema operativo
 - **Windows 10 u 11**: plataforma principal, con `run.bat` para instalar y arrancar.
-- **macOS y Linux**: los módulos de transcripción, conversión y enriquecido funcionan igual (verificado en macOS con ffmpeg 9). `run.bat` no aplica; se instala a mano (ver [Opción C](#opción-c--macos-y-linux)). La interfaz necesita Tkinter (`brew install python-tk` / `sudo apt install python3-tk`).
+- **macOS y Linux**: los módulos de transcripción, conversión y enriquecido funcionan igual (verificado en macOS con ffmpeg 9). **Grabar clase** es solo para macOS 13 o más nuevo y necesita las herramientas de desarrollo de Apple (`xcode-select --install`) para compilar su grabador la primera vez. `run.bat` no aplica; se instala a mano (ver [Opción C](#opción-c--macos-y-linux)). La interfaz necesita Tkinter (`brew install python-tk` / `sudo apt install python3-tk`).
 - **Aceleración**: la transcripción por GPU es solo NVIDIA CUDA (Windows/Linux). En Mac transcribe por CPU. En "Convertir vídeo", VideoToolbox de Apple no está soportado todavía: usa CPU.
 
 ### 2. Python 3.10 o superior
@@ -212,7 +212,10 @@ Si abres la app con `python main.py`, macOS la ejecuta dentro de `Python.app`: e
 sh tools/build_macos_app.sh --install
 ```
 
-Queda en `~/Applications/Heimdall.app` y se abre desde Launchpad, Spotlight o el Dock (puedes fijarla con "Mantener en el Dock"). La app no copia el código: ejecuta `main.py` y el `.venv` de esta carpeta, así que un `git pull` la actualiza. Si mueves la carpeta o recreas el `.venv` con otra versión de Python, vuelve a correr el script.
+Queda en `~/Applications/Heimdall.app` y se abre desde Launchpad, Spotlight o el Dock (puedes fijarla con "Mantener en el Dock"). La app no copia el código: ejecuta `main.py` y el `.venv` de esta carpeta, así que un `git pull` la actualiza (cierra y vuelve a abrir la app para ver los cambios). Si mueves la carpeta o recreas el `.venv` con otra versión de Python, vuelve a correr el script.
+
+- **Permiso de grabación**: la primera vez que uses **Grabar clase**, macOS pide el permiso de *Grabación de pantalla y audio del sistema* para Heimdall. Ese permiso queda atado a esta app: si vuelves a correr el script y la app cambió, el script lo avisa y hay que darlo otra vez (quitar Heimdall con «−» en esa lista y volver a agregarlo). Si nada cambió, el script no toca la app y el permiso se conserva.
+- La app agrega las rutas de Homebrew (`/opt/homebrew/bin`, `/usr/local/bin`) para encontrar `ffmpeg` aunque la abras desde el Dock.
 
 > 💡 **Entorno virtual (`.venv`)**: está ignorado por `.gitignore`, así que puedes crearlo sin miedo. Si no quieres usarlo, sáltate los pasos 2 y simplemente usa tu Python global.
 
@@ -242,7 +245,7 @@ Una vez instalado, **cada vez** que quieras usar la app:
   ```
 - **macOS / Linux**: `.venv/bin/python main.py` desde la carpeta del proyecto.
 
-La app abre una ventana con dos herramientas en la barra lateral: **Transcribir reunión** y **Convertir vídeo**.
+La app abre una ventana con tres herramientas en la barra lateral: **Transcribir reunión**, **Grabar clase** (solo macOS) y **Convertir vídeo**. En macOS, si creaste `Heimdall.app`, ábrela desde Launchpad o Spotlight.
 
 ## Estructura
 
@@ -301,7 +304,7 @@ mediaforge\
 - **Transcripción**: sin marcas de tiempo en "Solo texto" (con "Documento con capturas" el `.txt` sí las incluye).
 - **Convertir vídeo**: el audio se re-codifica a AAC. Para passthrough (mantener audio original), edita `converter.py` y reemplaza `-c:a aac -b:a 192k` por `-c:a copy`.
 - **Grabar clase**: solo macOS 13+. No graba contenido protegido con DRM (la imagen sale negra); en ese caso, si llega el sonido, se crea solo la transcripción.
-- **Documento con capturas**: sin OCR (no lee el texto que aparece en pantalla; solo guarda la imagen). Ver roadmap v2.
+- **Documento con capturas**: sin OCR (no lee el texto que aparece en pantalla; solo guarda la imagen). Ver "Próximas ideas".
 
 ## 📝 Historial de cambios
 
@@ -400,9 +403,11 @@ mediaforge\
 - **Fix de "intervalo produce demasiados frames"**: el filtro ffmpeg antiguo seleccionaba 24 frames por cada intervalo. Ahora se usa `fps=1/N` y produce exactamente 1 frame cada N segundos.
 - **Scroll en todas las pestañas**: cada pestaña va envuelta en un `CTkScrollableFrame`. Si reduces la altura de la ventana, aparece una scrollbar automática y se llega a todos los controles.
 
-## 🛣️ Roadmap (futuras versiones)
+## 🛣️ Próximas ideas
 
-### v2 — OCR con Tesseract
+Sin número de versión todavía: se numeran cuando se construyan.
+
+### OCR con Tesseract
 - **Qué añade**: lee el texto que aparece en pantalla en cada frame y lo añade al PDF, debajo de la imagen.
 - **Por qué importa**: en una reunión donde alguien comparte una slide o un dashboard, el OCR captura "OKR Q3 — Retención 78% → 85%" y lo indexa. Combinado con la transcripción de audio, el PDF se vuelve buscable: encontrar el momento exacto en que se habló de "retención" es trivial.
 - **Cómo se haría**:
@@ -412,10 +417,10 @@ mediaforge\
   - Añadir el texto OCR como segundo bloque bajo la imagen en el PDF
 - **Coste**: +5–10 min de proceso por hora de vídeo (depende de CPU).
 
-### v3 — Inteligencia sobre el documento
+### Inteligencia sobre el documento
 Tres sub-ideas, todas opcionales y configurables. El usuario activa solo las que quiera.
 
-#### v3a — LLM local (resumen + preguntas)
+#### LLM local (resumen + preguntas)
 - **Qué añade**: un resumen ejecutivo automático de la reunión ("los puntos clave fueron…"), tabla de temas con saltos a cada momento del PDF, y un modo "pregúntale al vídeo" donde escribes una pregunta y el sistema busca en la transcripción + OCR los momentos relevantes.
 - **Por qué importa**: convierte un PDF de 50 páginas en algo consultable.
 - **Herramientas**:
@@ -424,7 +429,7 @@ Tres sub-ideas, todas opcionales y configurables. El usuario activa solo las que
 - **Configuración**: el usuario indica la ruta del binario de Ollama o del modelo GGUF. Variable de entorno `OLLAMA_HOST` opcional.
 - **Privacidad**: 100% local. La reunión nunca sale del PC.
 
-#### v3b — Diarización (quién habla)
+#### Diarización (quién habla)
 - **Qué añade**: cada línea de la transcripción se etiqueta con "Hablante 1", "Hablante 2", etc. Útil cuando hay 2+ personas y quieres saber quién dijo qué.
 - **Por qué importa**: en una reunión de 2 personas, leer la transcripción sin saber quién dijo qué es un lío.
 - **Herramientas**:
@@ -432,7 +437,7 @@ Tres sub-ideas, todas opcionales y configurables. El usuario activa solo las que
   - Requiere un token gratuito de HuggingFace (el usuario lo mete en `~/.huggingface/token` o en una variable de entorno).
 - **Coste**: +2x tiempo de procesamiento (corre el audio por dos modelos).
 
-#### v3c — Integración opcional con APIs externas
+#### Integración opcional con APIs externas
 - **Qué añade**: si el usuario lo configura, se puede enviar el `.txt` final a un LLM externo (Claude, OpenAI, Gemini) para un resumen de mayor calidad.
 - **Por qué importa**: los modelos locales de 8B no son tan buenos como GPT-4/Claude. Para resúmenes profesionales, una API puede merecer la pena.
 - **Cómo se haría**:
@@ -443,9 +448,10 @@ Tres sub-ideas, todas opcionales y configurables. El usuario activa solo las que
 
 ## Cronograma tentativo
 
-- **v2 (OCR)**: siguiente iteración, ~1 sesión de trabajo.
-- **v3a (LLM local)**: cuando el usuario lo pida, ~2 sesiones.
-- **v3b (diarización)**: opcional, ~1 sesión.
-- **v3c (API)**: opcional, ~media sesión.
+- **OCR**: ~1 sesión de trabajo.
+- **LLM local**: cuando el usuario lo pida, ~2 sesiones.
+- **Diarización**: opcional, ~1 sesión.
+- **API externa**: opcional, ~media sesión.
+- **Grabar clase en Windows**: captura de ventana + audio del sistema (WASAPI), ~2 sesiones.
 
-Si te interesa alguna de estas, dímelo y la priorizamos. La versión actual ya es útil por sí sola: cualquier reunión de Teams que grabes la puedes convertir en un PDF consultable en 5–10 minutos.
+Si te interesa alguna de estas, dímelo y la priorizamos. La versión actual ya es útil por sí sola: cualquier reunión de Teams que grabes, o cualquier clase que veas en el navegador (macOS), la puedes convertir en un PDF consultable.

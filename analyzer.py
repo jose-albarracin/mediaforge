@@ -1,7 +1,7 @@
 """Multimodal analyzer: correlate audio transcription with video keyframes
 and produce a navigable PDF (plus optional JSON / .txt / frames folder).
 
-Pipeline (v1):
+Pipeline:
     1. Extract audio from the input video.
     2. Transcribe with faster-whisper (returns segments with timestamps).
     3. Extract keyframes from the video using ffmpeg scene detection
@@ -11,8 +11,8 @@ Pipeline (v1):
     5. Build a PDF (one page per block), an optional JSON, and an optional
        .txt with [hh:mm:ss] prefixes.
 
-Future v2 will add OCR of on-screen text. v3 will add LLM-based summary
-and diarization. See README for the roadmap.
+Ideas for later (OCR of on-screen text, LLM summary, diarization) are
+listed in the README under "Próximas ideas".
 """
 from __future__ import annotations
 
