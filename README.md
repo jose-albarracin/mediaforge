@@ -100,7 +100,7 @@ Necesitas **tres cosas** instaladas en tu sistema antes de poder ejecutar Heimda
 ### 1. Sistema operativo
 - **Windows 10 u 11**: plataforma principal, con `run.bat` para instalar y arrancar.
 - **macOS y Linux**: los módulos de transcripción, conversión y enriquecido funcionan igual (verificado en macOS con ffmpeg 9). `run.bat` no aplica; se instala a mano (ver [Opción C](#opción-c--macos-y-linux)). La interfaz necesita Tkinter (`brew install python-tk` / `sudo apt install python3-tk`).
-- **Aceleración**: la transcripción por GPU es solo NVIDIA CUDA (Windows/Linux). En Mac transcribe por CPU. En el conversor, VideoToolbox de Apple no está soportado todavía: usa CPU.
+- **Aceleración**: la transcripción por GPU es solo NVIDIA CUDA (Windows/Linux). En Mac transcribe por CPU. En "Convertir vídeo", VideoToolbox de Apple no está soportado todavía: usa CPU.
 
 ### 2. Python 3.10 o superior
 Descárgalo de https://www.python.org/downloads/. Durante la instalación **marca estas dos casillas**:
@@ -114,7 +114,7 @@ py -3 --version
 Debería mostrar `Python 3.10.x` o superior.
 
 ### 3. ffmpeg 5.1 o superior en el PATH
-Lo usan **Transcriptor** y **Conversor**. Se requiere 5.1+ porque la extracción de frames usa `-fps_mode` (la opción antigua `-vsync` se eliminó en ffmpeg 7). La forma más rápida en Windows es:
+Lo usan **Transcribir reunión** y **Convertir vídeo**. Se requiere 5.1+ porque la extracción de frames usa `-fps_mode` (la opción antigua `-vsync` se eliminó en ffmpeg 7). La forma más rápida en Windows es:
 ```powershell
 winget install Gyan.FFmpeg
 ```
@@ -248,27 +248,27 @@ mediaforge\
 
 | Error | Causa | Solución |
 |---|---|---|
-| `Library cublas64_12.dll is not found or cannot be loaded` | ctranslate2 intentó usar GPU NVIDIA sin las DLLs de CUDA disponibles. | **Solución recomendada (1.4 GB)**: `py -3 -m pip install nvidia-cublas-cu12 nvidia-cudnn-cu12 nvidia-cuda-runtime-cu12` y reinicia la app. La próxima versión de `run.bat` lo hace automáticamente. **Alternativa (3 GB)**: instalar CUDA Toolkit 12.x desde https://developer.nvidia.com/cuda-downloads. Mientras tanto, cambia "Dispositivo" a "CPU (software)" en la app. |
+| `Library cublas64_12.dll is not found or cannot be loaded` | ctranslate2 intentó usar GPU NVIDIA sin las DLLs de CUDA disponibles. | **Solución recomendada (1.4 GB)**: `py -3 -m pip install nvidia-cublas-cu12 nvidia-cudnn-cu12 nvidia-cuda-runtime-cu12` y reinicia la app. La próxima versión de `run.bat` lo hace automáticamente. **Alternativa (3 GB)**: instalar CUDA Toolkit 12.x desde https://developer.nvidia.com/cuda-downloads. Mientras tanto, en **Mostrar opciones avanzadas** cambia "Dispositivo" a "Solo procesador (CPU)". |
 | `ffmpeg no está en PATH` | ffmpeg no instalado. | `winget install Gyan.FFmpeg` y reinicia la terminal. |
 | `Model download failed` al transcribir | Red/firewall bloquea huggingface.co. | Reintenta; o descarga manualmente desde https://huggingface.co/Systran/faster-whisper-small. |
 | Conversión se queda al 0% y da error | El codec que elegiste no funciona con tu hardware. | En opciones avanzadas cambia "Aceleración" a `Automática` o `Procesador (CPU)`. |
 | Ventana se cierra al doble clic en `run.bat` | El `.bat` no mostraba errores. | `run.bat` siempre hace `pause` al final. |
-| Enriquecida: muchos frames (>300) | Threshold muy bajo o intervalo muy corto. | Sube "Sensibilidad de escena" o "Intervalo entre frames". |
-| Enriquecida (modos escena/híbrido): `Unrecognized option 'vsync'` o 0 frames con cualquier vídeo | Versiones ≤ 1.5 usaban `-vsync`, eliminado en ffmpeg 7+. | Corregido en v1.5.1 (usa `-fps_mode`). Requiere ffmpeg 5.1+. |
+| Documento con capturas: muchos frames (>300) | Sensibilidad muy alta o intervalo muy corto. | En opciones avanzadas baja la sensibilidad a cambios de pantalla o sube el intervalo entre capturas. |
+| Documento con capturas (modos escena/híbrido): `Unrecognized option 'vsync'` o 0 frames con cualquier vídeo | Versiones ≤ 1.5 usaban `-vsync`, eliminado en ffmpeg 7+. | Corregido en v1.5.1 (usa `-fps_mode`). Requiere ffmpeg 5.1+. |
 | Transcripción: `TypeError: open() got an unexpected keyword argument 'metadata_errors'` | PyAV 19 quitó un argumento que usa faster-whisper. | Corregido en v1.5.1: `requirements.txt` fija `av<19`. Si ya lo tienes: `pip install "av<19"`. |
-| Enriquecida con fuentes DejaVu: `Undefined font: dejavuI` | Faltaba registrar la variante cursiva. | Corregido en v1.5.1. |
-| Enriquecida: 0 frames, "ffmpeg no produjo ningún frame" | El vídeo no tiene cambios de escena con score ≥ threshold. | v1.1 hace auto-fallback a threshold 0.01. Si sigue sin haber frames, cambia el modo a "Intervalo fijo". |
-| Enriquecida: intervalo produce demasiados frames | (Bug de v1.0) `lt(mod(t,N),1)` seleccionaba 24 frames por intervalo. | v1.1 usa `fps=1/N` y produce exactamente 1 frame cada N segundos. |
-| Ventana corta no muestra todo el contenido | La pestaña no tenía scroll. | v1.1 envuelve cada pestaña en un `CTkScrollableFrame`; si la ventana es más baja que el contenido aparece una scrollbar automáticamente. |
+| Documento con capturas con fuentes DejaVu: `Undefined font: dejavuI` | Faltaba registrar la variante cursiva. | Corregido en v1.5.1. |
+| Documento con capturas: 0 frames, "ffmpeg no produjo ningún frame" | El vídeo no tiene cambios de escena con score ≥ threshold. | La app reintenta sola (umbral 0.01 en modo escena, intervalo fijo en modo híbrido). Si sigue sin haber frames, en opciones avanzadas elige "Cada cierto tiempo". |
+| Documento con capturas: intervalo produce demasiados frames | (Bug de v1.0) `lt(mod(t,N),1)` seleccionaba 24 frames por intervalo. | v1.1 usa `fps=1/N` y produce exactamente 1 frame cada N segundos. |
+| Ventana corta no muestra todo el contenido | Las páginas no tenían scroll. | Desde v1.1 cada página tiene scroll; si la ventana es más baja que el contenido aparece una barra de desplazamiento. |
 | PDF no muestra acentos | Estás usando fpdf2 con una fuente no Unicode. | v1.2 usa Helvetica built-in (Latin-1), que cubre todos los acentos del español. Para Unicode completo (japonés, chino, etc.) coloca las fuentes en `assets/`. |
-| Enriquecida: `FPDFUnicodeEncodingException: Character "X" outside the range of helvetica` | El audio tiene caracteres fuera de Latin-1 (japonés, chino, coreano, árabe, cirílico…) y no tienes fuentes Unicode. | v1.2 detecta esto automáticamente: usa Helvetica + filtra los caracteres problemáticos (salen como `?`). La app **no falla**, solo pierdes esos caracteres. Para soporte Unicode completo, descarga `assets/DejaVuSans.ttf` y `assets/DejaVuSans-Bold.ttf` desde https://github.com/dejavu-fonts/dejavu-fonts/tree/master/ttf. |
+| Documento con capturas: `FPDFUnicodeEncodingException: Character "X" outside the range of helvetica` | El audio tiene caracteres fuera de Latin-1 (japonés, chino, coreano, árabe, cirílico…) y no tienes fuentes Unicode. | v1.2 detecta esto automáticamente: usa Helvetica + filtra los caracteres problemáticos (salen como `?`). La app **no falla**, solo pierdes esos caracteres. Para soporte Unicode completo, descarga `assets/DejaVuSans.ttf` y `assets/DejaVuSans-Bold.ttf` desde https://github.com/dejavu-fonts/dejavu-fonts/tree/master/ttf. |
 
 ## Limitaciones conocidas
 
 - **Transcripción**: sin diarización (no etiqueta "Hablante 1 / Hablante 2").
-- **Transcripción**: sin marcas de tiempo en el `.txt` plano (la pestaña "Transcripción enriquecida" sí las incluye).
-- **Conversor**: el audio se re-codifica a AAC. Para passthrough (mantener audio original), edita `converter.py` y reemplaza `-c:a aac -b:a 192k` por `-c:a copy`.
-- **Enriquecida**: sin OCR (no lee el texto que aparece en pantalla; solo guarda la imagen). Ver roadmap v2.
+- **Transcripción**: sin marcas de tiempo en "Solo texto" (con "Documento con capturas" el `.txt` sí las incluye).
+- **Convertir vídeo**: el audio se re-codifica a AAC. Para passthrough (mantener audio original), edita `converter.py` y reemplaza `-c:a aac -b:a 192k` por `-c:a copy`.
+- **Documento con capturas**: sin OCR (no lee el texto que aparece en pantalla; solo guarda la imagen). Ver roadmap v2.
 
 ## 📝 Historial de cambios
 
@@ -392,7 +392,7 @@ Tres sub-ideas, todas opcionales y configurables. El usuario activa solo las que
 - **Por qué importa**: los modelos locales de 8B no son tan buenos como GPT-4/Claude. Para resúmenes profesionales, una API puede merecer la pena.
 - **Cómo se haría**:
   - Variable de entorno `HEIMDALL_API_KEY` (Claude / OpenAI)
-  - Campo opcional en la pestaña "Enriquecida" con el modelo a usar
+  - Campo opcional en las opciones avanzadas de "Transcribir reunión" con el modelo a usar
   - La app **deja claro en la UI** que el contenido se envía a un servicio externo, y solo lo hace si el usuario lo activa explícitamente
 - **Privacidad**: ⚠️ los datos salen del PC. Documentar bien este punto en la UI.
 
@@ -403,4 +403,4 @@ Tres sub-ideas, todas opcionales y configurables. El usuario activa solo las que
 - **v3b (diarización)**: opcional, ~1 sesión.
 - **v3c (API)**: opcional, ~media sesión.
 
-Si te interesa alguna de estas, dímelo y la priorizamos. La v1 actual ya es útil por sí sola: cualquier reunión de Teams que grabes la puedes convertir en un PDF consultable en 5–10 minutos.
+Si te interesa alguna de estas, dímelo y la priorizamos. La versión actual ya es útil por sí sola: cualquier reunión de Teams que grabes la puedes convertir en un PDF consultable en 5–10 minutos.
