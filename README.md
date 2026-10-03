@@ -29,9 +29,9 @@ Eso es todo. Si algo falla, abre un issue pegando la salida de la consola.
 
 > 🍎🐧 **macOS / Linux**: `run.bat` es solo para Windows, pero la app funciona igual. Ve a [Instalación en macOS y Linux](#opción-c--macos-y-linux).
 
-## La interfaz (v2.0)
+## La interfaz
 
-Una ventana con barra lateral y dos herramientas: **Transcribir reunión** y **Convertir vídeo**.
+Una ventana con barra lateral y tres herramientas: **Transcribir reunión**, **Grabar clase** y **Convertir vídeo**.
 
 - Cada herramienta pide lo mínimo: el archivo y el resultado que quieres. Lo técnico (modelo, dispositivo, modo de capturas, deduplicación, códec, aceleración) está en **Mostrar opciones avanzadas**, con valores por defecto que funcionan.
 - Una barra fija abajo muestra siempre el estado, el tiempo transcurrido, el progreso y el botón principal. Al terminar aparecen **Abrir PDF/texto** y **Mostrar carpeta**.
@@ -45,6 +45,29 @@ Una ventana con barra lateral y dos herramientas: **Transcribir reunión** y **C
 - Modelos: `tiny`, `base`, `small`, `medium`, `large-v3`.
 - Idiomas: español, inglés, francés, alemán, italiano, portugués + auto-detección.
 - Salida: `.txt` junto al archivo de entrada (se puede cambiar en "Guardar en").
+
+### 🎥 Grabar clase (macOS 13 o más nuevo)
+Graba lo que se ve y se escucha en **una ventana** (por ejemplo, el navegador con la clase) y al terminar crea el mismo documento con capturas, o solo el texto. **No descarga nada de la página**: registra lo que sale por tu pantalla y tus parlantes, como la grabación de pantalla del sistema.
+
+1. Abre la clase en el navegador y dale play.
+2. En **Grabar clase** elige la ventana (pulsa **Actualizar** si no aparece).
+3. Opcional: **Probar 10 s** para saber antes si la plataforma deja grabarla.
+4. Pulsa **Grabar**, mira la clase y al final pulsa **Detener y crear**.
+
+- **Revisión de protección (DRM)**: algunas plataformas protegen sus vídeos; macOS entrega entonces la imagen en negro y a veces el sonido mudo. Heimdall lo detecta (con **Probar 10 s** y automáticamente en los primeros 10 segundos de cada grabación) y te dice qué se puede grabar:
+  - **Se puede grabar completa** → documento con capturas y transcripción.
+  - **Solo se puede grabar el audio** → la imagen sale negra; se crea solo la transcripción.
+  - **No llega el sonido** → revisa que la pestaña no esté silenciada; si sigue igual, la plataforma protege el audio.
+  - **Esta clase no se puede grabar** → imagen negra y sin sonido; la grabación se detiene sola. Usa la transcripción o los subtítulos de la plataforma.
+  - **La clase parece estar en pausa** → sin sonido ni movimiento; dale play y prueba otra vez.
+
+  Heimdall **solo detecta** la protección; no intenta saltársela.
+- Se graba solo esa ventana y el sonido de su aplicación: puedes usar otras ventanas mientras tanto (las notificaciones de otras apps no entran), pero no cierres ni minimices la de la clase. Si la cierras, se conserva lo grabado hasta ese momento.
+- Las capturas se toman cuando cambia lo que se ve (se revisa cada 2 s; configurable en opciones avanzadas) y se descartan las repetidas, igual que en "Documento con capturas".
+- La grabación va a la velocidad de la clase: una clase de una hora tarda una hora en grabarse, más la transcripción.
+- **Primera vez**: macOS pide el permiso de **Grabación de pantalla y audio del sistema** (Ajustes del Sistema → Privacidad y seguridad). Actívalo para **Heimdall** (o para la Terminal, si la abres con `python main.py`) y vuelve a abrir la app.
+- **Cómo funciona**: `bin/heimdall-capture` es una herramienta pequeña en Swift (`capture/heimdall_capture.swift`) que usa ScreenCaptureKit de Apple. Se compila sola la primera vez que abres la página; necesita las herramientas de desarrollo de Apple (`xcode-select --install`). También puedes compilarla a mano con `sh tools/build_capture.sh`.
+- Windows y Linux: todavía no.
 
 ### 🔄 Convertir vídeo
 - Convierte entre formatos populares: **MP4** (H.264 / H.265) o extrae audio a **MP3**.
@@ -228,14 +251,20 @@ La app abre una ventana con dos herramientas en la barra lateral: **Transcribir 
 
 ```
 mediaforge\
-├── main.py            # Ventana, barra lateral y las dos páginas (transcribir, convertir)
+├── main.py            # Ventana, barra lateral y las tres páginas (transcribir, grabar, convertir)
 ├── ui_kit.py          # Paleta claro/oscuro, controles y la página base con barra de acción
 ├── transcriber.py     # Módulo 1: ffmpeg + faster-whisper
 ├── converter.py       # Módulo 2: conversión de vídeo/audio
 ├── analyzer.py        # Módulo 3: correlación multimodal + PDF enriquecido
+├── recorder.py        # Grabar clase: graba una ventana, revisa la protección y arma el documento
+├── capture/
+│   └── heimdall_capture.swift  # Grabación de ventana + sonido con ScreenCaptureKit (macOS)
+├── bin/               # heimdall-capture compilado (no se sube; se genera solo)
+├── tests/             # python -m unittest discover tests
 ├── report.py          # Mini-informes al final de cada operación
 ├── branding/          # Ícono de Heimdall: heimdall.svg (fuente) + .png, .ico, .icns
 ├── tools/
+│   ├── build_capture.sh     # Compila bin/heimdall-capture
 │   ├── build_icons.sh       # Regenera los íconos desde el SVG
 │   └── build_macos_app.sh   # Crea Heimdall.app (macOS) con nombre e ícono propios
 ├── requirements.txt   # Dependencias Python
@@ -260,6 +289,10 @@ mediaforge\
 | Documento con capturas: 0 frames, "ffmpeg no produjo ningún frame" | El vídeo no tiene cambios de escena con score ≥ threshold. | La app reintenta sola (umbral 0.01 en modo escena, intervalo fijo en modo híbrido). Si sigue sin haber frames, en opciones avanzadas elige "Cada cierto tiempo". |
 | Documento con capturas: intervalo produce demasiados frames | (Bug de v1.0) `lt(mod(t,N),1)` seleccionaba 24 frames por intervalo. | v1.1 usa `fps=1/N` y produce exactamente 1 frame cada N segundos. |
 | Ventana corta no muestra todo el contenido | Las páginas no tenían scroll. | Desde v1.1 cada página tiene scroll; si la ventana es más baja que el contenido aparece una barra de desplazamiento. |
+| Grabar clase: "macOS no dio permiso para grabar la pantalla" | Falta el permiso de Grabación de pantalla. | Ajustes del Sistema → Privacidad y seguridad → Grabación de pantalla y audio del sistema → activa Heimdall (o la Terminal) y vuelve a abrir la app. |
+| Grabar clase: "No llega el sonido" con una clase sin protección | La pestaña está silenciada, el volumen del vídeo en cero o el navegador bloqueó la reproducción automática. | Dale play a mano, sube el volumen del vídeo y vuelve a probar. El volumen general del Mac no importa. |
+| Grabar clase: la ventana no aparece en la lista | Está minimizada, en otro escritorio o es muy pequeña. | Déjala visible y pulsa **Actualizar**. |
+| Grabar clase: "Falta la herramienta de grabación" | No están las herramientas de desarrollo de Apple para compilar `heimdall-capture`. | `xcode-select --install` y vuelve a abrir la app. |
 | PDF no muestra acentos | Estás usando fpdf2 con una fuente no Unicode. | v1.2 usa Helvetica built-in (Latin-1), que cubre todos los acentos del español. Para Unicode completo (japonés, chino, etc.) coloca las fuentes en `assets/`. |
 | Documento con capturas: `FPDFUnicodeEncodingException: Character "X" outside the range of helvetica` | El audio tiene caracteres fuera de Latin-1 (japonés, chino, coreano, árabe, cirílico…) y no tienes fuentes Unicode. | v1.2 detecta esto automáticamente: usa Helvetica + filtra los caracteres problemáticos (salen como `?`). La app **no falla**, solo pierdes esos caracteres. Para soporte Unicode completo, descarga `assets/DejaVuSans.ttf` y `assets/DejaVuSans-Bold.ttf` desde https://github.com/dejavu-fonts/dejavu-fonts/tree/master/ttf. |
 
@@ -268,9 +301,16 @@ mediaforge\
 - **Transcripción**: sin diarización (no etiqueta "Hablante 1 / Hablante 2").
 - **Transcripción**: sin marcas de tiempo en "Solo texto" (con "Documento con capturas" el `.txt` sí las incluye).
 - **Convertir vídeo**: el audio se re-codifica a AAC. Para passthrough (mantener audio original), edita `converter.py` y reemplaza `-c:a aac -b:a 192k` por `-c:a copy`.
+- **Grabar clase**: solo macOS 13+. No graba contenido protegido con DRM (la imagen sale negra); en ese caso, si llega el sonido, se crea solo la transcripción.
 - **Documento con capturas**: sin OCR (no lee el texto que aparece en pantalla; solo guarda la imagen). Ver roadmap v2.
 
 ## 📝 Historial de cambios
+
+### v2.2 — Grabar clase
+- **Nueva página "Grabar clase"** (macOS 13+): graba lo que se ve y se escucha en una ventana mientras ves una clase en el navegador, sin descargar nada, y al terminar crea el documento con capturas o el texto.
+- **Revisión de protección (DRM)**: botón **Probar 10 s** y revisión automática al empezar cada grabación. Dice si se puede grabar completa, solo el audio, si no llega el sonido o si la clase no se puede grabar (y en ese caso detiene la grabación). Solo detecta; no evade la protección.
+- Herramienta `heimdall-capture` en Swift con ScreenCaptureKit (`capture/`), compilada automáticamente la primera vez. Audio a 16 kHz mono, el formato que usa Whisper.
+- Pruebas de la revisión de protección en `tests/test_recorder.py`.
 
 ### v2.1 — Ahora se llama Heimdall
 - **Nombre nuevo**: la app pasa de MediaForge a **Heimdall** (ventana, barra lateral, PDF generado, `run.bat` y documentación). El repositorio sigue siendo `mediaforge`.

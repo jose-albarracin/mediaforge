@@ -1,8 +1,11 @@
 """Heimdall: desktop shell.
 
-Two tools in a sidebar:
+Three tools in a sidebar:
   - Transcribir reunión: one flow that produces either a PDF with
     screenshots synced to the transcript, or plain text.
+  - Grabar clase: records what a window shows and plays (nothing is
+    downloaded), checks whether the platform protects it, and builds the
+    same document from the recording.
   - Convertir vídeo: MP4 re-encode or MP3 extraction.
 
 Every technical option still exists, but lives under "Opciones avanzadas"
@@ -12,14 +15,20 @@ presses one button. Long jobs run in worker threads (see ui_kit.JobPage).
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
+import threading
+import time
+from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog
 from typing import Optional
 
 import customtkinter as ctk
 
+import recorder
 import ui_kit as ui
 from analyzer import CancelledError as EnrichCancelled
 from analyzer import enrich_video
@@ -31,7 +40,7 @@ from transcriber import ComputeSupport, check_ffmpeg, detect_compute, transcribe
 
 APP_NAME = "Heimdall"
 BRANDING = Path(__file__).parent / "branding"
-APP_VERSION = "2.1"
+APP_VERSION = "2.2"
 
 # ---- Options (label shown, value passed to the engine) ------------------------
 MODELS = [
@@ -398,6 +407,301 @@ class TranscribePage(_AdvancedMixin, ui.JobPage):
 
 
 # ============================================================================
+# Grabar clase
+# ============================================================================
+VERDICT_COLOR = {"full": ui.SUCCESS, "audio_only": ui.TEXT, "video_only": ui.ERROR_TEXT,
+                 "paused": ui.TEXT, "blocked": ui.ERROR_TEXT, "unknown": ui.TEXT}
+
+
+class RecordPage(_AdvancedMixin, ui.JobPage):
+    title = "Grabar clase"
+    subtitle = ("Graba lo que se ve y se escucha en una ventana mientras ves la clase, "
+                "y al terminar crea el documento. No descarga nada de la página: "
+                "solo registra lo que sale por tu pantalla y tus parlantes.")
+    action_text = "Grabar"
+
+    def __init__(self, master, compute: ComputeSupport) -> None:
+        self._compute = compute
+        self._windows: list[recorder.Window] = []
+        self._rec: Optional[recorder.Recording] = None
+        self._stop = threading.Event()
+        self._result: Optional[Path] = None
+        self._loaded = False
+        self._unavailable = recorder.platform_note()
+        super().__init__(master)
+        self._open_btn = self.add_result_button("Abrir documento", self._open_result)
+        self.add_result_button("Mostrar carpeta", self._show_folder)
+        self.stop_btn = ui.primary_button(self.buttons, "Detener y crear", self._request_stop,
+                                          width=160)
+        if self._unavailable:
+            self.fail(self._unavailable)
+            self.start_btn.configure(state="disabled")
+
+    # ---- form ----------------------------------------------------------------
+    def build_form(self, host) -> None:
+        sec = ui.FormSection(host, "Clase")
+        sec.pack(fill="x")
+        cell = sec.row("Ventana")
+        cell.grid_columnconfigure(0, weight=1)
+        self.win_var = ctk.StringVar(value="Abre la clase en el navegador y pulsa Actualizar")
+        self.win_menu = ui.option_menu(cell, [self.win_var.get()], self.win_var, width=420,
+                                       command=lambda _v: self._clear_verdict())
+        self.win_menu.grid(row=0, column=0, sticky="w", padx=(0, 8))
+        ui.secondary_button(cell, "Actualizar", self._refresh_windows, width=110).grid(
+            row=0, column=1)
+        sec.note("Se graba solo esa ventana y el sonido de su aplicación. Puedes usar "
+                 "otras ventanas mientras tanto, pero no cierres ni minimices la de la clase.")
+
+        sec = ui.FormSection(host, "Revisar protección")
+        sec.pack(fill="x")
+        cell = sec.row("Antes de grabar")
+        self.probe_btn = ui.secondary_button(cell, "Probar 10 s", self._start_probe, width=130)
+        self.probe_btn.pack(side="left")
+        self.verdict_label = ctk.CTkLabel(cell, text="", font=ui.font(13, "bold"),
+                                          text_color=ui.TEXT, anchor="w")
+        self.verdict_label.pack(side="left", padx=(12, 0))
+        self.verdict_note = sec.note(
+            "Dale play a la clase y pulsa Probar. Heimdall graba unos segundos y te dice si "
+            "la plataforma deja grabar la imagen y el sonido. Al grabar se revisa igual.")
+
+        sec = ui.FormSection(host, "Resultado")
+        sec.pack(fill="x")
+        self.out_kind = ctk.StringVar(value=OUT_DOC)
+        ui.segmented(sec.row("Quiero obtener"), [OUT_DOC, OUT_TEXT], self.out_kind).pack(
+            anchor="w")
+        self.lang_var = ctk.StringVar(value=LANGUAGES[0][0])
+        ui.option_menu(sec.row("Idioma hablado"), _labels(LANGUAGES), self.lang_var,
+                       width=240).pack(anchor="w")
+        self.name_field = ui.entry(sec.row("Nombre"), "Nombre de la clase")
+        self.name_field.pack(fill="x")
+        self.out_field = _file_row(sec.row("Guardar en"), "Carpeta", "Cambiar…",
+                                   self._pick_output)
+        _set_entry(self.out_field, str(Path.home() / "Documents" / "Heimdall"))
+
+        self.adv_toggle = ui.link_button(host, "Mostrar opciones avanzadas",
+                                         self._toggle_advanced)
+        self.adv_toggle.pack(anchor="w", pady=(0, 12))
+        self.advanced = ctk.CTkFrame(host, fg_color="transparent")
+        sec = ui.FormSection(self.advanced, "Transcripción")
+        sec.pack(fill="x")
+        self.model_var = ctk.StringVar(value=MODELS[1][0])
+        ui.option_menu(sec.row("Modelo"), _labels(MODELS), self.model_var,
+                       width=300).pack(anchor="w")
+        sec = ui.FormSection(self.advanced, "Capturas")
+        sec.pack(fill="x")
+        self.interval_var = ctk.IntVar(value=2)
+        ui.SliderRow(sec.row("Revisar cada"), self.interval_var, 1, 10, 9,
+                     lambda v: f"{int(v)} s").pack(anchor="w")
+        sec.note("Cada cuánto se mira la pantalla. Solo se guarda una captura cuando "
+                 "cambia lo que se ve.")
+        self.window_var = ctk.IntVar(value=15)
+        ui.SliderRow(sec.row("Texto por captura"), self.window_var, 5, 60, 11,
+                     lambda v: f"±{int(v)} s").pack(anchor="w")
+        self.keep_audio_var = ctk.BooleanVar(value=False)
+        ui.checkbox(sec.row("Guardar"), "También el audio grabado (.wav)",
+                    self.keep_audio_var).pack(anchor="w")
+
+    def on_show(self) -> None:
+        if not self._loaded and not self._unavailable:
+            self._loaded = True
+            self._refresh_windows()
+
+    # ---- windows and probe -------------------------------------------------------
+    def _refresh_windows(self) -> None:
+        if self.is_running() or self._unavailable:
+            return
+        try:
+            wins = [w for w in recorder.list_windows() if w.title != APP_NAME]
+        except recorder.CaptureError as exc:
+            self.fail(str(exc))
+            self.log(str(exc))
+            return
+        self._windows = wins
+        current = self.win_var.get()
+        labels = [w.label for w in wins] or ["No hay ventanas abiertas"]
+        self.win_menu.configure(values=labels)
+        self.win_var.set(current if current in labels else labels[0])
+        self._clear_verdict()
+        self.set_state("idle", f"{len(wins)} ventanas disponibles. Elige la de la clase."
+                       if wins else "Abre la clase en el navegador y pulsa Actualizar.")
+
+    def _window(self) -> Optional[recorder.Window]:
+        return next((w for w in self._windows if w.label == self.win_var.get()), None)
+
+    def _clear_verdict(self) -> None:
+        self.verdict_label.configure(text="")
+
+    def _show_verdict(self, v: recorder.Verdict) -> None:
+        self.verdict_label.configure(text=v.title, text_color=VERDICT_COLOR[v.kind])
+        self.verdict_note.configure(text=v.detail)
+
+    def _start_probe(self) -> None:
+        win = self._window()
+        if not win:
+            self.fail("Elige primero la ventana de la clase.")
+            return
+        self.log("─" * 60)
+        self.log(f"Probando la ventana «{win.label}»…")
+        self.verdict_label.configure(text="Probando…", text_color=ui.TEXT_MUTED)
+
+        def job() -> str:
+            work = Path(tempfile.mkdtemp(prefix="heimdall_probe_"))
+            v = recorder.probe(win, work, log=self.qlog, cancel_flag=self.cancelled)
+            self._probe_verdict = v
+            self.qlog(f"Resultado: {v.title}. {v.detail}")
+            return "probe"
+
+        self.run_job(job, (recorder.CancelledError,), determinate=False,
+                     message="Probando… deja la clase reproduciéndose.")
+
+    # ---- recording ---------------------------------------------------------------
+    def set_state(self, state: str, message: str = "") -> None:
+        if state in ("cancelled", "error"):
+            self._rec = None  # the recording ended; reset the buttons
+            if hasattr(self, "stop_btn"):
+                self.stop_btn.configure(state="normal")
+        super().set_state(state, message)
+        if not hasattr(self, "stop_btn"):
+            return  # first call, from JobPage.__init__
+        self.stop_btn.pack_forget()
+        recording = state == "running" and self._rec is not None
+        if recording:
+            self.cancel_btn.configure(text="Descartar")
+            self.stop_btn.pack(side="right", padx=(8, 0))
+            self.cancel_btn.pack_forget()
+            self.cancel_btn.pack(side="right")
+        else:
+            self.cancel_btn.configure(text="Cancelar")
+        self.probe_btn.configure(state="disabled" if state == "running" else "normal")
+
+    def _pick_output(self) -> None:
+        current = self.out_field.get().strip()
+        path = filedialog.askdirectory(title="Carpeta para los documentos",
+                                       initialdir=current or None)
+        if path:
+            _set_entry(self.out_field, path)
+
+    def start(self) -> None:
+        win = self._window()
+        if not win:
+            self.fail("Elige primero la ventana de la clase.")
+            return
+        out_dir = Path(self.out_field.get().strip() or Path.home() / "Documents" / "Heimdall")
+        name = self.name_field.get().strip() or datetime.now().strftime("clase_%Y-%m-%d_%H%M")
+        name = "".join(c for c in name if c not in '/\\:*?"<>|').strip() or "clase"
+        _set_entry(self.name_field, name)
+        lang = dict(LANGUAGES)[self.lang_var.get()]
+        model = dict(MODELS)[self.model_var.get()]
+        device = "auto" if self._compute.has_cuda else "cpu"
+        want_doc = self.out_kind.get() == OUT_DOC
+        work = Path(tempfile.mkdtemp(prefix="heimdall_rec_"))
+        self._rec = recorder.Recording(win, work, interval_s=float(self.interval_var.get()),
+                                       log=self.qlog)
+        self._stop.clear()
+        self._warned = False
+        self.log("─" * 60)
+        self.log(f"Clase: {name}\nVentana: {win.label}\nCarpeta: {out_dir}")
+
+        def job() -> str:
+            rec = self._rec
+            assert rec is not None
+            try:
+                rec.start()
+                while not self._stop.is_set() and rec.alive:
+                    if self.cancelled():
+                        raise recorder.CancelledError()
+                    if not self._warned and rec.elapsed >= recorder.PROBE_SECONDS:
+                        self._warned = True
+                        v = rec.verdict(first_seconds=recorder.PROBE_SECONDS)
+                        self.qlog(f"Revisión de los primeros segundos: {v.title}. {v.detail}")
+                        self._early_verdict = v
+                        if v.kind == "blocked":
+                            rec.stop()
+                            raise recorder.CaptureError(
+                                "Esta clase no se puede grabar: la imagen sale negra y no "
+                                "llega sonido. Si estaba en pausa, dale play y vuelve a "
+                                "grabar; si no, usa la transcripción de la plataforma.")
+                    time.sleep(0.2)
+                rec.stop()
+                if self.cancelled():
+                    raise recorder.CancelledError()
+                if rec.error and not rec.frames:
+                    raise recorder.CaptureError(rec.error)
+                secs = (rec.stopped or {}).get("audio_seconds", 0)
+                self.qlog(f"Grabación terminada: {fmt_duration(secs)}.")
+                self.qprogress(0)
+                self._phase = "build"
+                res = recorder.build_from_recording(
+                    rec, out_dir, name, model_size=model, language=lang, device=device,
+                    want_doc=want_doc, window_s=float(self.window_var.get()),
+                    log=self.qlog, cancel_flag=self.cancelled, progress=self.qprogress)
+                if self.keep_audio_var.get():
+                    shutil.copy2(rec.out_dir / "audio.wav", out_dir / f"{name}.wav")
+                return str(res.get("pdf") or res["txt"])
+            finally:
+                rec.stop()
+                shutil.rmtree(work, ignore_errors=True)
+
+        self._phase = "record"
+        self._early_verdict = None
+        self.run_job(job, (recorder.CancelledError,), determinate=True,
+                     message="Empezando a grabar…")
+        self._live()
+
+    def _live(self) -> None:
+        """While recording, show time, sound and the early protection check."""
+        rec = self._rec
+        if not self.is_running() or rec is None:
+            return
+        if self._phase == "record":
+            if rec.started_at is None:
+                msg = "Empezando a grabar…"
+            else:
+                sound = "se oye sonido" if rec.current_level() >= recorder.SOUND_RMS \
+                    else "sin sonido"
+                msg = f"Grabando · {sound}"
+                v = self._early_verdict
+                if v is not None and v.kind != "full":
+                    msg += f" · {v.title}"
+                    self._show_verdict(v)
+                elif v is not None:
+                    self._show_verdict(v)
+            self.status.configure(text=msg)
+        elif self._phase == "build":
+            if self.stop_btn.winfo_manager():
+                self.stop_btn.pack_forget()
+                self.cancel_btn.configure(text="Cancelar")
+            self.status.configure(text="Creando el documento… puede tardar varios minutos.")
+        self.after(500, self._live)
+
+    def _request_stop(self) -> None:
+        self._stop.set()
+        self.stop_btn.configure(state="disabled")
+        self.status.configure(text="Deteniendo…")
+
+    def on_done(self, payload: str) -> None:
+        if payload == "probe":
+            v = self._probe_verdict
+            self._show_verdict(v)
+            self.set_state("idle", "Prueba terminada. " + v.title + ".")
+            return
+        self.stop_btn.configure(state="normal")
+        self._rec = None
+        self._result = Path(payload)
+        kind = "PDF" if self._result.suffix == ".pdf" else "texto"
+        self._open_btn.configure(text=f"Abrir {kind}")
+        self.set_state("done", f"Listo: {self._result.name}")
+
+    def _open_result(self) -> None:
+        if self._result and self._result.exists():
+            _open_path(self._result)
+
+    def _show_folder(self) -> None:
+        if self._result:
+            _reveal(self._result)
+
+
+# ============================================================================
 # Convertir vídeo
 # ============================================================================
 class ConvertPage(_AdvancedMixin, ui.JobPage):
@@ -606,9 +910,11 @@ class App(ctk.CTk):
 
         self.pages: dict[str, ui.JobPage] = {
             "transcribe": TranscribePage(self, compute),
+            "record": RecordPage(self, compute),
             "convert": ConvertPage(self, support),
         }
         self.sidebar.add("transcribe", "Transcribir reunión")
+        self.sidebar.add("record", "Grabar clase")
         self.sidebar.add("convert", "Convertir vídeo")
         self.show("transcribe")
         if not ffmpeg_ok:
@@ -629,6 +935,8 @@ class App(ctk.CTk):
         for k, page in self.pages.items():
             if k == key:
                 page.grid(row=0, column=1, sticky="nsew")
+                if hasattr(page, "on_show"):
+                    page.after(50, page.on_show)
             else:
                 page.grid_forget()
         self.sidebar.select(key)

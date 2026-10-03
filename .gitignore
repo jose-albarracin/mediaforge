@@ -154,3 +154,6 @@ models/
 # Capturas de pantalla de la app / debugging
 screenshots/
 *.screenshot.png
+
+# Grabar clase: helper compilado (tools/build_capture.sh)
+bin/
