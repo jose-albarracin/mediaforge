@@ -237,12 +237,17 @@ class Recording:
     def current_level(self) -> float:
         return self.levels[-1]["rms"] if self.levels else 0.0
 
-    def verdict(self, first_seconds: Optional[float] = None) -> Verdict:
-        frames, levels = self.frames, self.levels
-        if first_seconds:
-            frames = [f for f in frames if f["t"] <= first_seconds]
-            levels = [lv for lv in levels if lv["t"] <= first_seconds]
+    def verdict(self, last_seconds: Optional[float] = None) -> Verdict:
+        """Verdict for the whole recording, or only its last N seconds."""
+        frames, levels = list(self.frames), list(self.levels)
+        if last_seconds and levels:
+            since = levels[-1]["t"] - last_seconds
+            frames = [f for f in frames if f["t"] >= since]
+            levels = [lv for lv in levels if lv["t"] >= since]
         return assess(frames, levels)
+
+    def ever_had_sound(self) -> bool:
+        return any(lv["rms"] >= SOUND_RMS for lv in self.levels)
 
     def stop(self) -> None:
         """Ask the helper to finish the files and wait for it."""
@@ -305,15 +310,18 @@ def build_from_recording(
     from analyzer import CancelledError as AnalyzerCancelled
 
     wav = rec.out_dir / "audio.wav"
-    verdict = rec.verdict()
+    # Over the whole recording the class may have been paused at times, so
+    # only ask whether the picture came through (not black most of the time).
+    shown = [f for f in rec.frames if f["dark"] < BLACK_FRACTION]
+    picture_ok = len(shown) >= max(1, len(rec.frames) // 5)
     out_dir.mkdir(parents=True, exist_ok=True)
     txt_path = out_dir / f"{name}.txt"
     pdf_path = out_dir / f"{name}.pdf"
 
     if not wav.exists() or wav.stat().st_size <= 44:
         raise CaptureError("La grabación no tiene audio.")
-    if not verdict.audio_ok:
-        log("[!] Casi no se captó sonido; la transcripción puede salir vacía.")
+    if not rec.ever_had_sound():
+        log("[!] No se captó sonido; la transcripción puede salir vacía.")
 
     log(f"Transcribiendo con el modelo '{model_size}'…")
     progress(0.05)
@@ -327,7 +335,7 @@ def build_from_recording(
     log(f"[OK] Texto: {txt_path}")
     result: dict[str, Optional[Path]] = {"txt": txt_path, "pdf": None}
 
-    if want_doc and verdict.video_ok:
+    if want_doc and picture_ok:
         # Keep only real captures: black ones are the protected picture.
         saved = {f["file"]: f for f in rec.frames if f.get("saved") and f.get("file")}
         frames_dir = out_dir / f"{name}_capturas"

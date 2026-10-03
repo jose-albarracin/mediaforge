@@ -52,13 +52,16 @@ Graba lo que se ve y se escucha en **una ventana** (por ejemplo, el navegador co
 1. Abre la clase en el navegador y dale play.
 2. En **Grabar clase** elige la ventana (pulsa **Actualizar** si no aparece).
 3. Opcional: **Probar 10 s** para saber antes si la plataforma deja grabarla.
-4. Pulsa **Grabar**, mira la clase y al final pulsa **Detener y crear**.
+4. Pulsa **Grabar**. Empieza una **cuenta regresiva de 10 s** (se ve grande en la barra de abajo y como número en el ícono del Dock): ve a la clase y dale play. Al llegar a 0 empieza a grabar y el Dock muestra el tiempo grabado.
+5. Mira la clase y al final pulsa **Detener y crear**.
 
-- **Revisión de protección (DRM)**: algunas plataformas protegen sus vídeos; macOS entrega entonces la imagen en negro y a veces el sonido mudo. Heimdall lo detecta (con **Probar 10 s** y automáticamente en los primeros 10 segundos de cada grabación) y te dice qué se puede grabar:
+No hay límite para darle play: si empieza a grabar con la clase en pausa, Heimdall te avisa ("La clase parece estar en pausa") pero **no corta la grabación**; el aviso cambia solo cuando le das play. La cuenta regresiva se ajusta (0–30 s) en opciones avanzadas.
+
+- **Revisión de protección (DRM)**: algunas plataformas protegen sus vídeos; macOS entrega entonces la imagen en negro y a veces el sonido mudo. Heimdall lo detecta (con **Probar 10 s** y durante toda la grabación, mirando los últimos 10 segundos) y te dice qué se puede grabar:
   - **Se puede grabar completa** → documento con capturas y transcripción.
   - **Solo se puede grabar el audio** → la imagen sale negra; se crea solo la transcripción.
   - **No llega el sonido** → revisa que la pestaña no esté silenciada; si sigue igual, la plataforma protege el audio.
-  - **Esta clase no se puede grabar** → imagen negra y sin sonido; la grabación se detiene sola. Usa la transcripción o los subtítulos de la plataforma.
+  - **Esta clase no se puede grabar** → imagen negra y sin sonido. Detén la grabación y usa la transcripción o los subtítulos de la plataforma.
   - **La clase parece estar en pausa** → sin sonido ni movimiento; dale play y prueba otra vez.
 
   Heimdall **solo detecta** la protección; no intenta saltársela.
@@ -113,7 +116,7 @@ Graba lo que se ve y se escucha en **una ventana** (por ejemplo, el navegador co
 - **Salidas opcionales**: PDF, JSON estructurado, `.txt` con timestamps, carpeta de frames.
 - **Auto-fallback**: si tu vídeo no tiene cambios de escena con score ≥ al threshold que pusiste, la app reintenta automáticamente con el mínimo (0.01) en modo escena, o con intervalo fijo en modo híbrido, y avisa en el log. Si el que falla es ffmpeg (archivo dañado, formato no soportado), el log muestra el error real de ffmpeg.
 - Usa `fpdf2` para el PDF (puro Python) y `Pillow` para mantener las imágenes ligeras.
-- **PDF Unicode opcional**: por defecto usa Helvetica built-in (Latin-1, soporta acentos del español). Si colocas `assets/DejaVuSans.ttf` + `assets/DejaVuSans-Bold.ttf` en la carpeta del proyecto, el PDF pasa automáticamente a Unicode completo (japonés, chino, coreano, árabe, cirílico, etc.). Sin esos archivos, los caracteres fuera de Latin-1 se reemplazan por `?` — la app **nunca** falla.
+- **PDF Unicode**: el PDF usa la fuente DejaVu Sans, incluida en `fonts/` (licencia libre, `fonts/LICENSE-DejaVu.txt`): acentos, japonés, chino, coreano, árabe, cirílico, etc. No hay que instalar nada.
 - **Limpieza de alucinaciones de Whisper**: si el audio tiene silencios largos, Whisper puede inventarse caracteres chinos / japoneses / coreanos. Esos caracteres se eliminan automáticamente del PDF antes de imprimirlo (los `.txt` y `.json` los conservan para que veas lo que Whisper dijo realmente).
 
 ## 📋 Requisitos
@@ -223,15 +226,9 @@ Solo necesitas un **driver NVIDIA actualizado** (≥ 525). No hace falta instala
 
 En la app, abre **Transcribir reunión → Mostrar opciones avanzadas** y elige `Dispositivo: Automático` (recomendado) o `GPU NVIDIA (CUDA)`.
 
-### Soporte Unicode opcional (PDF con japonés, chino, árabe…)
+### Fuente del PDF (Unicode)
 
-Por defecto el PDF usa *Helvetica* built-in (Latin-1): cubre acentos del español, pero caracteres fuera de Latin-1 salen como `?`. Si quieres soporte Unicode completo:
-
-1. Descarga `DejaVuSans.ttf` y `DejaVuSans-Bold.ttf` desde https://github.com/dejavu-fonts/dejavu-fonts/tree/master/ttf
-2. Colócalas en `mediaforge\assets\`
-3. La app las detectará automáticamente en el siguiente arranque.
-
-(La carpeta `assets/` está en `.gitignore`, así que no contaminas el repo.)
+Desde v2.3 la fuente **DejaVu Sans** viene incluida en `fonts/` (regular, negrita y cursiva; licencia libre en `fonts/LICENSE-DejaVu.txt`). El PDF muestra acentos, japonés, chino, árabe, cirílico, etc. sin instalar nada. Si alguna vez faltara, la app usa Helvetica y los caracteres fuera de Latin-1 salen como `?`, sin fallar.
 
 ## ▶️ Ejecución rápida
 
@@ -262,6 +259,7 @@ mediaforge\
 ├── bin/               # heimdall-capture compilado (no se sube; se genera solo)
 ├── tests/             # python -m unittest discover tests
 ├── report.py          # Mini-informes al final de cada operación
+├── fonts/             # DejaVu Sans para el PDF (licencia en LICENSE-DejaVu.txt)
 ├── branding/          # Ícono de Heimdall: heimdall.svg (fuente) + .png, .ico, .icns
 ├── tools/
 │   ├── build_capture.sh     # Compila bin/heimdall-capture
@@ -294,8 +292,8 @@ mediaforge\
 | Grabar clase: "No llega el sonido" con una clase sin protección | La pestaña está silenciada, el volumen del vídeo en cero o el navegador bloqueó la reproducción automática. | Dale play a mano, sube el volumen del vídeo y vuelve a probar. El volumen general del Mac no importa. |
 | Grabar clase: la ventana no aparece en la lista | Está minimizada, en otro escritorio o es muy pequeña. | Déjala visible y pulsa **Actualizar**. |
 | Grabar clase: "Falta la herramienta de grabación" | No están las herramientas de desarrollo de Apple para compilar `heimdall-capture`. | `xcode-select --install` y vuelve a abrir la app. |
-| PDF no muestra acentos | Estás usando fpdf2 con una fuente no Unicode. | v1.2 usa Helvetica built-in (Latin-1), que cubre todos los acentos del español. Para Unicode completo (japonés, chino, etc.) coloca las fuentes en `assets/`. |
-| Documento con capturas: `FPDFUnicodeEncodingException: Character "X" outside the range of helvetica` | El audio tiene caracteres fuera de Latin-1 (japonés, chino, coreano, árabe, cirílico…) y no tienes fuentes Unicode. | v1.2 detecta esto automáticamente: usa Helvetica + filtra los caracteres problemáticos (salen como `?`). La app **no falla**, solo pierdes esos caracteres. Para soporte Unicode completo, descarga `assets/DejaVuSans.ttf` y `assets/DejaVuSans-Bold.ttf` desde https://github.com/dejavu-fonts/dejavu-fonts/tree/master/ttf. |
+| PDF no muestra acentos | Estás usando fpdf2 con una fuente no Unicode. | Desde v2.3 la fuente DejaVu Sans viene en `fonts/`. Si falta esa carpeta, vuelve a descargar el repo. |
+| Documento con capturas: `FPDFUnicodeEncodingException: Character "X" outside the range of helvetica` | El audio tiene caracteres fuera de Latin-1 (japonés, chino, coreano, árabe, cirílico…) y no tienes fuentes Unicode. | v1.2 detecta esto automáticamente: usa Helvetica + filtra los caracteres problemáticos (salen como `?`). La app **no falla**, solo pierdes esos caracteres. Desde v2.3 no pasa: la fuente DejaVu Sans viene incluida en `fonts/`. |
 
 ## Limitaciones conocidas
 
@@ -306,6 +304,11 @@ mediaforge\
 - **Documento con capturas**: sin OCR (no lee el texto que aparece en pantalla; solo guarda la imagen). Ver roadmap v2.
 
 ## 📝 Historial de cambios
+
+### v2.3 — Cuenta regresiva y fuente incluida
+- **Cuenta regresiva al pulsar Grabar** (10 s por defecto, 0–30 s en opciones avanzadas): número grande en la barra de abajo y en el ícono del Dock, para ir a la clase y darle play. Mientras graba, el Dock muestra el tiempo grabado.
+- **Sin límite para darle play**: la revisión de protección mira siempre los últimos 10 s y solo avisa; ya no detiene la grabación ni se queda con un "en pausa" viejo.
+- **Fuente DejaVu Sans incluida** en `fonts/`: desaparece el aviso "DejaVuSans.ttf no encontrada" y el PDF muestra cualquier idioma.
 
 ### v2.2 — Grabar clase
 - **Nueva página "Grabar clase"** (macOS 13+): graba lo que se ve y se escucha en una ventana mientras ves una clase en el navegador, sin descargar nada, y al terminar crea el documento con capturas o el texto.
@@ -386,7 +389,7 @@ mediaforge\
 
 ### v1.2 — Pulido de "Enriquecida" + robustez Unicode
 - **Calidad de imagen configurable**: cada frame extraído se re-codifica como JPEG progresivo antes de incluirlo en el PDF. Tres presets (Alta q92 / Media q85 / Baja q75) → reduce el peso ~30× sin pérdida visible. Ejemplo real: 39 frames de pantalla compartida pasaron de 88 MB (PNG lossless) a 3 MB (JPEG q85).
-- **PDF Unicode opcional**: si colocas `assets/DejaVuSans.ttf` + `assets/DejaVuSans-Bold.ttf` en la carpeta del proyecto, el PDF se genera con Unicode completo (japonés, chino, coreano, árabe, cirílico, etc.). Sin esos archivos, la app **nunca falla**: usa Helvetica built-in y reemplaza cualquier carácter fuera de Latin-1 por `?` (acentos del español se preservan siempre).
+- **PDF Unicode opcional**: si colocas `assets/DejaVuSans.ttf` + `assets/DejaVuSans-Bold.ttf` en la carpeta del proyecto, el PDF se genera con Unicode completo (desde v2.3 la fuente ya viene en `fonts/`).
 - **Log grande con botón "📋 Copiar log"** integrado en la pestaña, para pegar el detalle de cualquier error en un chat.
 - **Traceback completo** en caso de excepción: cualquier error de `analyzer.py` se captura con su pila completa y se muestra en el log.
 - **Captura de pantalla de error** en `Errores conocidos`: cuando algo falla, el botón "Copiar log" pone el traceback en el portapapeles.

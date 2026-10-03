@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from recorder import assess  # noqa: E402
+from recorder import Recording, Window, assess  # noqa: E402
 
 
 def frames(dark: float, diffs: list[float]) -> list[dict]:
@@ -57,6 +57,20 @@ class AssessTest(unittest.TestCase):
 
     def test_too_short(self):
         self.assertEqual(assess(frames(0.0, [255]), levels([0.1])).kind, "unknown")
+
+
+
+class RollingCheckTest(unittest.TestCase):
+    """Pressing play late must not leave a stale "paused" verdict."""
+
+    def test_last_seconds_sees_play_after_a_pause(self):
+        rec = Recording(Window(1, "Chrome", "clase"), Path("/tmp/unused"))
+        rec.frames = [{"t": float(i), "dark": 0.0, "diff": 0.0 if i < 15 else 3.0,
+                       "saved": False} for i in range(30)]
+        rec.levels = [{"t": float(i), "rms": 0.0 if i < 15 else 0.15} for i in range(1, 31)]
+        self.assertEqual(rec.verdict(last_seconds=10).kind, "full")
+        self.assertEqual(assess(rec.frames[:12], rec.levels[:12]).kind, "paused")
+        self.assertTrue(rec.ever_had_sound())
 
 
 if __name__ == "__main__":

@@ -40,7 +40,7 @@ from transcriber import ComputeSupport, check_ffmpeg, detect_compute, transcribe
 
 APP_NAME = "Heimdall"
 BRANDING = Path(__file__).parent / "branding"
-APP_VERSION = "2.2"
+APP_VERSION = "2.3"
 
 # ---- Options (label shown, value passed to the engine) ------------------------
 MODELS = [
@@ -409,6 +409,7 @@ class TranscribePage(_AdvancedMixin, ui.JobPage):
 # ============================================================================
 # Grabar clase
 # ============================================================================
+COUNTDOWN_DEFAULT = 10
 VERDICT_COLOR = {"full": ui.SUCCESS, "audio_only": ui.TEXT, "video_only": ui.ERROR_TEXT,
                  "paused": ui.TEXT, "blocked": ui.ERROR_TEXT, "unknown": ui.TEXT}
 
@@ -427,12 +428,17 @@ class RecordPage(_AdvancedMixin, ui.JobPage):
         self._stop = threading.Event()
         self._result: Optional[Path] = None
         self._loaded = False
+        self._countdown_left: Optional[int] = None
         self._unavailable = recorder.platform_note()
         super().__init__(master)
         self._open_btn = self.add_result_button("Abrir documento", self._open_result)
         self.add_result_button("Mostrar carpeta", self._show_folder)
         self.stop_btn = ui.primary_button(self.buttons, "Detener y crear", self._request_stop,
                                           width=160)
+        # Big countdown number, left of the status text in the bottom bar.
+        self.countdown_label = ctk.CTkLabel(self.status.master, text="",
+                                            font=ui.font(30, "bold"),
+                                            text_color=ui.ACCENT)
         if self._unavailable:
             self.fail(self._unavailable)
             self.start_btn.configure(state="disabled")
@@ -462,7 +468,8 @@ class RecordPage(_AdvancedMixin, ui.JobPage):
         self.verdict_label.pack(side="left", padx=(12, 0))
         self.verdict_note = sec.note(
             "Dale play a la clase y pulsa Probar. Heimdall graba unos segundos y te dice si "
-            "la plataforma deja grabar la imagen y el sonido. Al grabar se revisa igual.")
+            "la plataforma deja grabar la imagen y el sonido. Al grabar se revisa todo el "
+            "tiempo y te avisa, pero nunca corta la grabación.")
 
         sec = ui.FormSection(host, "Resultado")
         sec.pack(fill="x")
@@ -500,6 +507,13 @@ class RecordPage(_AdvancedMixin, ui.JobPage):
         self.keep_audio_var = ctk.BooleanVar(value=False)
         ui.checkbox(sec.row("Guardar"), "También el audio grabado (.wav)",
                     self.keep_audio_var).pack(anchor="w")
+        sec = ui.FormSection(self.advanced, "Al pulsar Grabar")
+        sec.pack(fill="x")
+        self.countdown_var = ctk.IntVar(value=COUNTDOWN_DEFAULT)
+        ui.SliderRow(sec.row("Cuenta regresiva"), self.countdown_var, 0, 30, 6,
+                     lambda v: f"{int(v)} s" if v else "sin espera").pack(anchor="w")
+        sec.note("Tiempo para ir a la clase y darle play antes de que empiece a grabar. "
+                 "Se ve aquí y en el ícono del Dock.")
 
     def on_show(self) -> None:
         if not self._loaded and not self._unavailable:
@@ -556,6 +570,8 @@ class RecordPage(_AdvancedMixin, ui.JobPage):
 
     # ---- recording ---------------------------------------------------------------
     def set_state(self, state: str, message: str = "") -> None:
+        if state in ("done", "cancelled", "error") and hasattr(self, "countdown_label"):
+            self._badge("")
         if state in ("cancelled", "error"):
             self._rec = None  # the recording ended; reset the buttons
             if hasattr(self, "stop_btn"):
@@ -594,11 +610,61 @@ class RecordPage(_AdvancedMixin, ui.JobPage):
         model = dict(MODELS)[self.model_var.get()]
         device = "auto" if self._compute.has_cuda else "cpu"
         want_doc = self.out_kind.get() == OUT_DOC
+        self._pending = (win, out_dir, name, lang, model, device, want_doc)
+        seconds = int(self.countdown_var.get())
+        if seconds <= 0:
+            self._begin()
+            return
+        self._countdown_left = seconds
+        self.start_btn.pack_forget()
+        self.cancel_btn.configure(text="Cancelar")
+        self.cancel_btn.pack(side="right")
+        self.probe_btn.configure(state="disabled")
+        self._countdown_tick()
+
+    # ---- countdown before recording ------------------------------------------------
+    def _countdown_tick(self) -> None:
+        left = self._countdown_left
+        if left is None:
+            return
+        if left <= 0:
+            self._countdown_left = None
+            self._begin()
+            return
+        self.countdown_label.configure(text=str(left))
+        self.countdown_label.pack(side="left", padx=(0, 14), before=self.status)
+        self.status.configure(text="Ve a la clase y dale play: empieza a grabar en "
+                                   f"{left} s", text_color=ui.TEXT)
+        self._badge(str(left))
+        self._countdown_left = left - 1
+        self.after(1000, self._countdown_tick)
+
+    def _request_cancel(self) -> None:
+        if self._countdown_left is not None:
+            self._countdown_left = None
+            self._badge("")
+            self.countdown_label.pack_forget()
+            self.cancel_btn.pack_forget()
+            self.set_state("idle", "Cuenta regresiva cancelada.")
+            return
+        super()._request_cancel()
+
+    def _badge(self, text: str) -> None:
+        """Number on the Dock icon (macOS, Tk 9); harmless elsewhere."""
+        try:
+            self.tk.call("wm", "iconbadge", self.winfo_toplevel()._w, text)
+        except Exception:  # noqa: BLE001 - older Tk has no iconbadge
+            pass
+        top = self.winfo_toplevel()
+        top.title(f"● {text} · {APP_NAME}" if text else APP_NAME)
+
+    def _begin(self) -> None:
+        self.countdown_label.pack_forget()
+        win, out_dir, name, lang, model, device, want_doc = self._pending
         work = Path(tempfile.mkdtemp(prefix="heimdall_rec_"))
         self._rec = recorder.Recording(win, work, interval_s=float(self.interval_var.get()),
                                        log=self.qlog)
         self._stop.clear()
-        self._warned = False
         self.log("─" * 60)
         self.log(f"Clase: {name}\nVentana: {win.label}\nCarpeta: {out_dir}")
 
@@ -607,20 +673,21 @@ class RecordPage(_AdvancedMixin, ui.JobPage):
             assert rec is not None
             try:
                 rec.start()
+                # No time limit to press play: the check looks at the last
+                # 10 s, again and again, and only warns. It never stops the
+                # recording; the user decides with "Detener" or "Descartar".
+                last_check, last_kind = 0.0, None
                 while not self._stop.is_set() and rec.alive:
                     if self.cancelled():
                         raise recorder.CancelledError()
-                    if not self._warned and rec.elapsed >= recorder.PROBE_SECONDS:
-                        self._warned = True
-                        v = rec.verdict(first_seconds=recorder.PROBE_SECONDS)
-                        self.qlog(f"Revisión de los primeros segundos: {v.title}. {v.detail}")
+                    if rec.elapsed >= recorder.PROBE_SECONDS and \
+                            rec.elapsed - last_check >= 2:
+                        last_check = rec.elapsed
+                        v = rec.verdict(last_seconds=recorder.PROBE_SECONDS)
                         self._early_verdict = v
-                        if v.kind == "blocked":
-                            rec.stop()
-                            raise recorder.CaptureError(
-                                "Esta clase no se puede grabar: la imagen sale negra y no "
-                                "llega sonido. Si estaba en pausa, dale play y vuelve a "
-                                "grabar; si no, usa la transcripción de la plataforma.")
+                        if v.kind != last_kind:
+                            last_kind = v.kind
+                            self.qlog(f"[{fmt_duration(rec.elapsed)}] {v.title}. {v.detail}")
                     time.sleep(0.2)
                 rec.stop()
                 if self.cancelled():
@@ -660,14 +727,15 @@ class RecordPage(_AdvancedMixin, ui.JobPage):
                 sound = "se oye sonido" if rec.current_level() >= recorder.SOUND_RMS \
                     else "sin sonido"
                 msg = f"Grabando · {sound}"
+                self._badge(ui.fmt_clock(rec.elapsed))
                 v = self._early_verdict
-                if v is not None and v.kind != "full":
-                    msg += f" · {v.title}"
-                    self._show_verdict(v)
-                elif v is not None:
+                if v is not None:
+                    if v.kind != "full":
+                        msg += f" · {v.title}"
                     self._show_verdict(v)
             self.status.configure(text=msg)
         elif self._phase == "build":
+            self._badge("")
             if self.stop_btn.winfo_manager():
                 self.stop_btn.pack_forget()
                 self.cancel_btn.configure(text="Cancelar")

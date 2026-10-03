@@ -578,16 +578,25 @@ def _fmt_time(seconds: float) -> str:
 
 
 # ---- Font handling --------------------------------------------------------
-# DejaVu Sans is the universal Unicode font shipped with Linux distros.
-# It is NOT downloaded automatically: the user drops DejaVuSans.ttf (and
-# optionally DejaVuSans-Bold.ttf) into assets/. If present, we use them
-# (covers ~50k glyphs including Spanish accents, Japanese, Chinese,
-# Korean, Cyrillic, Greek, Arabic, etc.). If absent, we fall back to
-# the built-in Helvetica + char-stripping, which keeps the app working
-# but loses any non-Latin-1 characters (replaced with '?').
-_ASSETS_DIR = Path(__file__).parent / "assets"
-_FONT_REGULAR = _ASSETS_DIR / "DejaVuSans.ttf"
-_FONT_BOLD = _ASSETS_DIR / "DejaVuSans-Bold.ttf"
+# DejaVu Sans (Unicode: Spanish accents, Japanese, Chinese, Korean,
+# Cyrillic, Greek, Arabic…) ships with the repo in fonts/ (free license,
+# fonts/LICENSE-DejaVu.txt). A copy in assets/ (the old manual location)
+# still wins. If neither exists we fall back to the built-in Helvetica +
+# char-stripping: the app keeps working but non-Latin-1 characters become '?'.
+_HERE = Path(__file__).parent
+_FONT_DIRS = (_HERE / "assets", _HERE / "fonts")
+
+
+def _font(name: str) -> Path:
+    for folder in _FONT_DIRS:
+        if (folder / name).exists():
+            return folder / name
+    return _FONT_DIRS[-1] / name
+
+
+_FONT_REGULAR = _font("DejaVuSans.ttf")
+_FONT_BOLD = _font("DejaVuSans-Bold.ttf")
+_FONT_ITALIC = _font("DejaVuSans-Oblique.ttf")
 
 
 def _try_register_unicode_fonts(pdf) -> bool:
@@ -597,11 +606,12 @@ def _try_register_unicode_fonts(pdf) -> bool:
     if not _FONT_REGULAR.exists():
         return False
     bold = _FONT_BOLD if _FONT_BOLD.exists() else _FONT_REGULAR
+    italic = _FONT_ITALIC if _FONT_ITALIC.exists() else _FONT_REGULAR
     # The PDF uses regular, bold AND italic (error notes, page footer).
     # Without an italic face fpdf2 raises "Undefined font: dejavuI".
     pdf.add_font("DejaVu", "", str(_FONT_REGULAR))
     pdf.add_font("DejaVu", "B", str(bold))
-    pdf.add_font("DejaVu", "I", str(_FONT_REGULAR))
+    pdf.add_font("DejaVu", "I", str(italic))
     return True
 
 
@@ -680,12 +690,10 @@ def build_enriched_pdf(
     if use_unicode:
         font = "DejaVu"
         pdf.footer_font = font
-        log("[OK] Usando fuente Unicode (DejaVu Sans).")
     else:
         font = "Helvetica"
-        log("[!] assets/DejaVuSans.ttf no encontrada - usando Helvetica. "
-            "Caracteres fuera de Latin-1 seran reemplazados por '?'. "
-            "Para soporte Unicode copia DejaVuSans.ttf en la carpeta assets/.")
+        log("[!] Falta fonts/DejaVuSans.ttf - usando Helvetica. Los caracteres "
+            "fuera de Latin-1 se reemplazan por '?'.")
 
     def _safe(text: str) -> str:
         """Strip characters that the active font can't render."""
