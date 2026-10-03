@@ -290,6 +290,7 @@ mediaforge\
 | Documento con capturas: intervalo produce demasiados frames | (Bug de v1.0) `lt(mod(t,N),1)` seleccionaba 24 frames por intervalo. | v1.1 usa `fps=1/N` y produce exactamente 1 frame cada N segundos. |
 | Ventana corta no muestra todo el contenido | Las páginas no tenían scroll. | Desde v1.1 cada página tiene scroll; si la ventana es más baja que el contenido aparece una barra de desplazamiento. |
 | Grabar clase: "macOS no dio permiso para grabar la pantalla" | Falta el permiso de Grabación de pantalla. | Ajustes del Sistema → Privacidad y seguridad → Grabación de pantalla y audio del sistema → activa Heimdall (o la Terminal) y vuelve a abrir la app. |
+| Grabar clase: sigue pidiendo permiso aunque ya está activado | Se volvió a crear `Heimdall.app` con cambios y macOS ya no la reconoce como la app a la que diste permiso. | En Grabación de pantalla y audio del sistema quita Heimdall con «−», vuelve a agregarlo desde `~/Applications` y abre la app otra vez. |
 | Grabar clase: "No llega el sonido" con una clase sin protección | La pestaña está silenciada, el volumen del vídeo en cero o el navegador bloqueó la reproducción automática. | Dale play a mano, sube el volumen del vídeo y vuelve a probar. El volumen general del Mac no importa. |
 | Grabar clase: la ventana no aparece en la lista | Está minimizada, en otro escritorio o es muy pequeña. | Déjala visible y pulsa **Actualizar**. |
 | Grabar clase: "Falta la herramienta de grabación" | No están las herramientas de desarrollo de Apple para compilar `heimdall-capture`. | `xcode-select --install` y vuelve a abrir la app. |
@@ -315,6 +316,7 @@ mediaforge\
 ### v2.1 — Ahora se llama Heimdall
 - **Nombre nuevo**: la app pasa de MediaForge a **Heimdall** (ventana, barra lateral, PDF generado, `run.bat` y documentación). El repositorio sigue siendo `mediaforge`.
 - **Ícono propio**: casco con cresta, guarda nasal y carrilleras sobre un fondo azul noche, en el azul claro de la app. Aparece en la ventana, el Dock/barra de tareas y junto al nombre en la barra lateral.
+- **`Heimdall.app` encuentra ffmpeg** al abrirla desde el Dock o Launchpad (antes no veía las herramientas de Homebrew). Al reinstalarla solo se reemplaza si cambió, para no perder el permiso de Grabación de pantalla.
 - **`Heimdall.app` para macOS** (`sh tools/build_macos_app.sh --install`): con `python main.py` el Dock mostraba el cohete de Python al abrir y al cerrar, y el menú decía "Python"; desde la app siempre se ven el nombre y el ícono de Heimdall.
 - **Íconos versionados** en `branding/`: `heimdall.svg` es la fuente; `heimdall.png` (ventana y Dock), `heimdall.ico` (Windows, 16–256 px) y `heimdall.icns` (macOS) se regeneran con `sh tools/build_icons.sh`.
 
