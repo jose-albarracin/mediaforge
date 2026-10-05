@@ -111,10 +111,14 @@ final class Recorder: NSObject, SCStreamOutput, SCStreamDelegate {
         t0 = hostNow()
     }
 
+    // macOS can stop a capture on its own: low disk space (the system
+    // purge stops every screen recording), a display change, the window
+    // closing. Don't end the recording: reconnect and keep going. Silence
+    // and missing frames fill the gap, so times in the transcript stay true.
+    var onStreamStopped: ((Error) -> Void)?
+
     func stream(_ stream: SCStream, didStopWithError error: Error) {
-        // Typically the window was closed. Keep what was recorded.
-        emit(["event": "error", "code": "stream", "message": error.localizedDescription])
-        stopSignal.signal()
+        onStreamStopped?(error)
     }
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sb: CMSampleBuffer, of type: SCStreamOutputType) {
@@ -204,6 +208,119 @@ final class Recorder: NSObject, SCStreamOutput, SCStreamDelegate {
     }
 }
 
+// MARK: - capture session (start, stop, reconnect)
+
+final class CaptureSession: @unchecked Sendable {
+    let rec: Recorder
+    let windowID: UInt32
+    let lock = NSLock()
+    var streams: [SCStream] = []
+    var reconnecting = false
+    var stopping = false
+    var interruptions = 0
+
+    init(rec: Recorder, windowID: UInt32) {
+        self.rec = rec
+        self.windowID = windowID
+    }
+
+    func start(win: SCWindow, app: SCRunningApplication, display: SCDisplay) async throws {
+        // Picture: the chosen window only, at up to 1920 px wide.
+        let vcfg = SCStreamConfiguration()
+        let scale = min(2.0, 1920.0 / max(1, win.frame.width))
+        vcfg.width = max(2, Int(win.frame.width * scale))
+        vcfg.height = max(2, Int(win.frame.height * scale))
+        vcfg.minimumFrameInterval = CMTime(value: 1, timescale: 2)
+        vcfg.showsCursor = false
+        vcfg.queueDepth = 3
+        let vstream = SCStream(filter: SCContentFilter(desktopIndependentWindow: win),
+                               configuration: vcfg, delegate: rec)
+
+        // Sound: everything the window's app plays (other apps are excluded).
+        let acfg = SCStreamConfiguration()
+        acfg.capturesAudio = true
+        acfg.excludesCurrentProcessAudio = true
+        acfg.sampleRate = 16000
+        acfg.channelCount = 1
+        acfg.width = 2; acfg.height = 2
+        acfg.minimumFrameInterval = CMTime(value: 1, timescale: 1)
+        let astream = SCStream(filter: SCContentFilter(display: display, including: [app], exceptingWindows: []),
+                               configuration: acfg, delegate: rec)
+
+        try vstream.addStreamOutput(rec, type: .screen, sampleHandlerQueue: rec.videoQ)
+        try astream.addStreamOutput(rec, type: .audio, sampleHandlerQueue: rec.audioQ)
+        try await vstream.startCapture()
+        try await astream.startCapture()
+        lock.withLock { streams = [vstream, astream] }
+    }
+
+    func handleStop(_ error: Error) {
+        let old: [SCStream]? = lock.withLock {
+            if stopping || reconnecting { return nil }
+            reconnecting = true
+            interruptions += 1
+            defer { streams = [] }
+            return streams
+        }
+        guard let old else { return }
+        let at = hostNow() - rec.t0
+        emit(["event": "interrupted", "t": round(at * 10) / 10,
+              "message": error.localizedDescription, "count": interruptions])
+        Task {
+            for s in old { try? await s.stopCapture() }
+            await self.reconnect(since: at)
+        }
+    }
+
+    // Try for up to 10 minutes: the cause (a disk purge, a display change)
+    // usually clears in seconds. Give up only if the window is gone.
+    func reconnect(since: Double) async {
+        let deadline = hostNow() + 600
+        var attempt = 0
+        while hostNow() < deadline {
+            if isStopping() { return }
+            attempt += 1
+            try? await Task.sleep(nanoseconds: UInt64(min(10, attempt * 2)) * 1_000_000_000)
+            if isStopping() { return }
+            guard let content = try? await SCShareableContent.excludingDesktopWindows(
+                true, onScreenWindowsOnly: false) else { continue }
+            guard let win = content.windows.first(where: { $0.windowID == windowID }),
+                  let app = win.owningApplication else {
+                emit(["event": "error", "code": "window",
+                      "message": "La ventana de la clase se cerró; se guarda lo grabado hasta ahí."])
+                stopSignal.signal()
+                return
+            }
+            guard let display = content.displays.first(where: { $0.frame.intersects(win.frame) })
+                    ?? content.displays.first else { continue }
+            do {
+                try await start(win: win, app: app, display: display)
+                lock.withLock { reconnecting = false }
+                let now = hostNow() - rec.t0
+                emit(["event": "resumed", "t": round(now * 10) / 10,
+                      "gap": round((now - since) * 10) / 10])
+                return
+            } catch {
+                continue
+            }
+        }
+        emit(["event": "error", "code": "stream",
+              "message": "macOS no dejó retomar la grabación en 10 minutos; se guarda lo grabado."])
+        stopSignal.signal()
+    }
+
+    func isStopping() -> Bool { lock.withLock { stopping } }
+
+    func stop() async {
+        let current: [SCStream] = lock.withLock {
+            stopping = true
+            defer { streams = [] }
+            return streams
+        }
+        for s in current { try? await s.stopCapture() }
+    }
+}
+
 // MARK: - commands
 
 func argValue(_ name: String, _ args: [String]) -> String? {
@@ -251,35 +368,10 @@ func record(_ args: [String]) async {
     do { rec = try Recorder(outDir: URL(fileURLWithPath: outPath), interval: interval) }
     catch { fail("io", "No se pudo crear \(outPath): \(error.localizedDescription)") }
 
-    // Picture: the chosen window only, at up to 1920 px wide.
-    let vcfg = SCStreamConfiguration()
-    let scale = min(2.0, 1920.0 / max(1, win.frame.width))
-    vcfg.width = max(2, Int(win.frame.width * scale))
-    vcfg.height = max(2, Int(win.frame.height * scale))
-    vcfg.minimumFrameInterval = CMTime(value: 1, timescale: 2)
-    vcfg.showsCursor = false
-    vcfg.queueDepth = 3
-    let vstream = SCStream(filter: SCContentFilter(desktopIndependentWindow: win),
-                           configuration: vcfg, delegate: rec)
-
-    // Sound: everything the window's app plays (other apps are excluded).
-    let acfg = SCStreamConfiguration()
-    acfg.capturesAudio = true
-    acfg.excludesCurrentProcessAudio = true
-    acfg.sampleRate = 16000
-    acfg.channelCount = 1
-    acfg.width = 2; acfg.height = 2
-    acfg.minimumFrameInterval = CMTime(value: 1, timescale: 1)
-    let astream = SCStream(filter: SCContentFilter(display: display, including: [app], exceptingWindows: []),
-                           configuration: acfg, delegate: rec)
-    do {
-        try vstream.addStreamOutput(rec, type: .screen, sampleHandlerQueue: rec.videoQ)
-        try astream.addStreamOutput(rec, type: .audio, sampleHandlerQueue: rec.audioQ)
-        try await vstream.startCapture()
-        try await astream.startCapture()
-    } catch {
-        fail("start", "No se pudo empezar a grabar: \(error.localizedDescription)")
-    }
+    let session = CaptureSession(rec: rec, windowID: wid)
+    do { try await session.start(win: win, app: app, display: display) }
+    catch { fail("start", "No se pudo empezar a grabar: \(error.localizedDescription)") }
+    rec.onStreamStopped = { error in session.handleStop(error) }
     emit(["event": "started", "app": app.applicationName, "title": win.title ?? "",
           "audio": rec.outDir.appendingPathComponent("audio.wav").path, "frames": rec.framesDir.path])
 
@@ -309,13 +401,13 @@ func record(_ args: [String]) async {
     }
     _ = sources
 
-    try? await vstream.stopCapture()
-    try? await astream.stopCapture()
+    await session.stop()
     rec.audioQ.sync {}
     rec.videoQ.sync {}
     let seconds = Double(rec.wav.samples) / Double(rec.wav.sampleRate)
     rec.wav.close()
-    emit(["event": "stopped", "audio_seconds": round(seconds * 10) / 10, "frames": rec.nFrames])
+    emit(["event": "stopped", "audio_seconds": round(seconds * 10) / 10, "frames": rec.nFrames,
+          "interruptions": session.interruptions])
 }
 
 @main

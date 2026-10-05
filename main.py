@@ -40,7 +40,7 @@ from transcriber import ComputeSupport, check_ffmpeg, detect_compute, transcribe
 
 APP_NAME = "Heimdall"
 BRANDING = Path(__file__).parent / "branding"
-APP_VERSION = "2.3"
+APP_VERSION = "2.4"
 
 # ---- Options (label shown, value passed to the engine) ------------------------
 MODELS = [
@@ -696,6 +696,12 @@ class RecordPage(_AdvancedMixin, ui.JobPage):
                     raise recorder.CaptureError(rec.error)
                 secs = (rec.stopped or {}).get("audio_seconds", 0)
                 self.qlog(f"Grabación terminada: {fmt_duration(secs)}.")
+                if rec.interruptions:
+                    self._warning = (f"macOS interrumpió la grabación "
+                                     f"{len(rec.interruptions)} vez/veces; revisa el registro.")
+                if rec.error and not self._stop.is_set():
+                    # It ended on its own (window closed, could not resume).
+                    self._warning = rec.error
                 self.qprogress(0)
                 self._phase = "build"
                 res = recorder.build_from_recording(
@@ -711,6 +717,7 @@ class RecordPage(_AdvancedMixin, ui.JobPage):
 
         self._phase = "record"
         self._early_verdict = None
+        self._warning = None
         self.run_job(job, (recorder.CancelledError,), determinate=True,
                      message="Empezando a grabar…")
         self._live()
@@ -728,6 +735,8 @@ class RecordPage(_AdvancedMixin, ui.JobPage):
                     else "sin sonido"
                 msg = f"Grabando · {sound}"
                 self._badge(ui.fmt_clock(rec.elapsed))
+                if rec.interrupted:
+                    msg = "macOS detuvo la grabación · reintentando…"
                 v = self._early_verdict
                 if v is not None:
                     if v.kind != "full":
@@ -759,6 +768,12 @@ class RecordPage(_AdvancedMixin, ui.JobPage):
         kind = "PDF" if self._result.suffix == ".pdf" else "texto"
         self._open_btn.configure(text=f"Abrir {kind}")
         self.set_state("done", f"Listo: {self._result.name}")
+        if self._warning:
+            # Done, but the recording did not cover the whole class: say so
+            # instead of a plain green "Listo".
+            self.status.configure(text=f"Listo, con aviso: {self._warning}",
+                                  text_color=ui.ERROR_TEXT)
+            self.toggle_log(True)
 
     def _open_result(self) -> None:
         if self._result and self._result.exists():

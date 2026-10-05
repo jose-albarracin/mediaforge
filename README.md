@@ -66,6 +66,7 @@ No hay límite para darle play: si empieza a grabar con la clase en pausa, Heimd
 
   Heimdall **solo detecta** la protección; no intenta saltársela.
 - Se graba solo esa ventana y el sonido de su aplicación: puedes usar otras ventanas mientras tanto (las notificaciones de otras apps no entran), pero no cierres ni minimices la de la clase. Si la cierras, se conserva lo grabado hasta ese momento.
+- **No tiene límite de duración.** Si macOS corta la grabación por su cuenta (por ejemplo, cuando le falta espacio en disco), Heimdall la retoma sola en unos segundos; la barra muestra "reintentando…" y al final avisa cuántas veces pasó y cuánto se perdió. Los tiempos del texto siguen siendo los de la clase.
 - Las capturas se toman cuando cambia lo que se ve (se revisa cada 2 s; configurable en opciones avanzadas) y se descartan las repetidas, igual que en "Documento con capturas".
 - La grabación va a la velocidad de la clase: una clase de una hora tarda una hora en grabarse, más la transcripción.
 - **Primera vez**: macOS pide el permiso de **Grabación de pantalla y audio del sistema** (Ajustes del Sistema → Privacidad y seguridad). Actívalo para **Heimdall** (o para la Terminal, si la abres con `python main.py`) y vuelve a abrir la app.
@@ -293,6 +294,7 @@ mediaforge\
 | Grabar clase: "macOS no dio permiso para grabar la pantalla" | Falta el permiso de Grabación de pantalla. | Ajustes del Sistema → Privacidad y seguridad → Grabación de pantalla y audio del sistema → activa Heimdall (o la Terminal) y vuelve a abrir la app. |
 | Grabar clase: sigue pidiendo permiso aunque ya está activado | Se volvió a crear `Heimdall.app` con cambios y macOS ya no la reconoce como la app a la que diste permiso. | En Grabación de pantalla y audio del sistema quita Heimdall con «−», vuelve a agregarlo desde `~/Applications` y abre la app otra vez. |
 | Grabar clase: "No llega el sonido" con una clase sin protección | La pestaña está silenciada, el volumen del vídeo en cero o el navegador bloqueó la reproducción automática. | Dale play a mano, sube el volumen del vídeo y vuelve a probar. El volumen general del Mac no importa. |
+| Grabar clase: la grabación se cortó sola a los pocos minutos | macOS detiene todas las grabaciones de pantalla cuando necesita liberar espacio en disco (o cambia de pantalla). Antes de v2.4 Heimdall terminaba ahí. | Desde v2.4 Heimdall la retoma sola en unos segundos y el registro dice cuánto se perdió. Si pasa seguido, libera espacio: con menos de ~10 GB libres macOS lo hace a menudo. |
 | Grabar clase: la ventana no aparece en la lista | Está minimizada, en otro escritorio o es muy pequeña. | Déjala visible y pulsa **Actualizar**. |
 | Grabar clase: "Falta la herramienta de grabación" | No están las herramientas de desarrollo de Apple para compilar `heimdall-capture`. | `xcode-select --install` y vuelve a abrir la app. |
 | PDF no muestra acentos | Estás usando fpdf2 con una fuente no Unicode. | Desde v2.3 la fuente DejaVu Sans viene en `fonts/`. Si falta esa carpeta, vuelve a descargar el repo. |
@@ -307,6 +309,10 @@ mediaforge\
 - **Documento con capturas**: sin OCR (no lee el texto que aparece en pantalla; solo guarda la imagen). Ver "Próximas ideas".
 
 ## 📝 Historial de cambios
+
+### v2.4 — La grabación ya no se corta sola
+- **Grabar clase retoma la grabación** si macOS la detiene (pasa cuando el sistema libera espacio en disco: corta todas las grabaciones de pantalla). Antes la clase quedaba en los primeros minutos; ahora se reconecta en unos segundos y sigue, hasta que pulses **Detener y crear**.
+- Al terminar, si hubo cortes, la barra dice "Listo, con aviso" y el registro muestra cuándo y cuántos segundos se perdieron.
 
 ### v2.3 — Cuenta regresiva y fuente incluida
 - **Cuenta regresiva al pulsar Grabar** (10 s por defecto, 0–30 s en opciones avanzadas): número grande en la barra de abajo y en el ícono del Dock, para ir a la clase y darle play. Mientras graba, el Dock muestra el tiempo grabado.

@@ -85,6 +85,12 @@ def _error_text(event: dict) -> str:
     return event.get("message") or "Error desconocido al grabar."
 
 
+def _clock(seconds: float) -> str:
+    m, s = divmod(int(seconds), 60)
+    h, m = divmod(m, 60)
+    return f"{h:d}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
+
+
 # ---- windows ---------------------------------------------------------------
 @dataclass
 class Window:
@@ -180,6 +186,8 @@ class Recording:
     started_at: Optional[float] = None
     stopped: Optional[dict] = None
     error: Optional[str] = None
+    interrupted: bool = False      # macOS stopped the capture; reconnecting
+    interruptions: list[dict] = field(default_factory=list)
     _reader: Optional[threading.Thread] = None
 
     def start(self) -> None:
@@ -220,6 +228,15 @@ class Recording:
             elif kind == "started":
                 self.started_at = time.monotonic()
                 self.log(f"Grabando la ventana «{self.window.label}».")
+            elif kind == "interrupted":
+                self.interrupted = True
+                self.interruptions.append(event)
+                self.log(f"[!] [{_clock(event.get('t', 0))}] macOS detuvo la grabación "
+                         f"({event.get('message', '')}). Reintentando…")
+            elif kind == "resumed":
+                self.interrupted = False
+                self.log(f"[OK] [{_clock(event.get('t', 0))}] Grabación retomada; se "
+                         f"perdieron {event.get('gap', 0):.0f} s.")
             elif kind == "stopped":
                 self.stopped = event
             elif kind == "error":
